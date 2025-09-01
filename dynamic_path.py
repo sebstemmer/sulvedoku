@@ -5,7 +5,7 @@ from enum import Enum
 from typing import NamedTuple, Optional
 
 from grid import Coord, Cell, create_empty_grid, get_random_empty_where_allowed_values_is_len_1, set_value_in_grid, \
-    remove_values_from_grid, all_coords_0_to_80
+    remove_values_from_grid, all_coords_0_to_80, Grid
 
 
 class At(NamedTuple):
@@ -20,7 +20,7 @@ class SolutionPathNode(NamedTuple):
         max_go_back_depth: Maximum depth of going back when backtracking
          (None means no maximum depth, -1 means  no backtracking).
     """
-    grid: dict[Coord, Cell]
+    grid: Grid
     at: Optional[At]
     recursion_depth: int
     max_go_back_depth: Optional[int]
@@ -28,7 +28,7 @@ class SolutionPathNode(NamedTuple):
 
 
 class RemoveCluesResult(NamedTuple):
-    grid: dict[Coord, Cell]
+    grid: Grid
     depth: int
 
 
@@ -67,7 +67,7 @@ class MaxRemoveCluesDepthReached(Exception):
 
 def create_node(
         node: SolutionPathNode,
-        grid: dict[Coord, Cell],
+        grid: Grid,
         at: Optional[At],
         recursion_depth: int
 ) -> SolutionPathNode:
@@ -81,7 +81,7 @@ def create_node(
 
 
 def create_start_node(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         max_go_back_depth: Optional[int],
         method: FillPathCreationMethod
 ) -> SolutionPathNode:
@@ -120,7 +120,7 @@ def find_trivial_solutions(
     coord = trivial_solution[0]
     value = trivial_solution[1].allowed_values[0]
 
-    new_grid: dict[Coord, Cell] = set_value_in_grid(
+    new_grid: Grid = set_value_in_grid(
         grid=node.grid,
         coord=coord,
         value=value
@@ -173,7 +173,7 @@ def go_back_to_previous_node_and_try_other_value(
     if at is None:
         raise GoBackFailed()
 
-    allowed_values: list[int] = at.previous_node.grid[
+    allowed_values: list[int] = at.previous_node.grid.cells[
         at.coord
     ].allowed_values
 
@@ -194,7 +194,7 @@ def go_back_to_previous_node_and_try_other_value(
 
     other_value_try: int = not_yet_tried[random_idx]
 
-    other_value_try_grid: dict[Coord, Cell] = set_value_in_grid(
+    other_value_try_grid: Grid = set_value_in_grid(
         grid=at.previous_node.grid,
         coord=at.coord,
         value=other_value_try
@@ -221,32 +221,33 @@ def go_back_to_previous_node_and_try_other_value(
 def find_next_coord_and_value(
         grid: dict[Coord, Cell]
 ) -> Optional[tuple[Coord, int]]:
+    pass  # todo
 
 
 def find_next_coord_to_handle_for_ordered(
-        grid: dict[Coord, Cell]
+        grid: Grid
 ) -> Optional[Coord]:
     for coord in all_coords_0_to_80:
-        if grid[coord].value == 0:
+        if grid.cells[coord].value == 0:
             return coord
 
     return None
 
 
 def find_next_coord_to_handle_for_random(
-        grid: dict[Coord, Cell]
+        grid: Grid
 ) -> Optional[Coord]:
     all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
     random.shuffle(all_coords_0_to_80_list)
     for coord in all_coords_0_to_80_list:
-        if grid[coord].value == 0:
+        if grid.cells[coord].value == 0:
             return coord
 
     return None
 
 
 def find_next_coord_to_handle_for_smallest_allowed(
-        grid: dict[Coord, Cell]
+        grid: Grid
 ) -> Optional[Coord]:
     all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
     random.shuffle(all_coords_0_to_80_list)
@@ -255,8 +256,8 @@ def find_next_coord_to_handle_for_smallest_allowed(
     coord_to_min_num_allowed_values: Optional[Coord] = None
 
     for coord in all_coords_0_to_80_list:
-        num_allowed_values: int = len(grid[coord].allowed_values)
-        if grid[coord].value == 0 and num_allowed_values < min_num_allowed_values:
+        num_allowed_values: int = len(grid.cells[coord].allowed_values)
+        if grid.cells[coord].value == 0 and num_allowed_values < min_num_allowed_values:
             min_num_allowed_values = num_allowed_values
             coord_to_min_num_allowed_values = coord
 
@@ -305,7 +306,7 @@ def recursively_find_solution(
     if next_coord is None:
         return handled_trivial_solutions
 
-    allowed_values: list[int] = handled_trivial_solutions.grid[next_coord].allowed_values
+    allowed_values: list[int] = handled_trivial_solutions.grid.cells[next_coord].allowed_values
 
     if len(allowed_values) == 0:
         return go_back_to_previous_node_and_try_other_value(
@@ -320,7 +321,7 @@ def recursively_find_solution(
 
     next_value: int = allowed_values[random_idx]
 
-    next_grid: dict[Coord, Cell] = set_value_in_grid(
+    next_grid: Grid = set_value_in_grid(
         grid=handled_trivial_solutions.grid,
         coord=next_coord,
         value=next_value
@@ -345,7 +346,7 @@ def recursively_find_solution(
 
 
 def solve_grid(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         max_go_back_depth: Optional[int],
         method: FillPathCreationMethod
 ) -> SolutionPathNode:
@@ -353,7 +354,7 @@ def solve_grid(
     Solve a (not necessary valid) grid.
 
     Args:
-        grid (dict[Coord, Cell]): Grid to solve.
+        grid (Grid): Grid to solve.
         max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
         method (FillPathCreationMethod): Method used for solving.
 
@@ -377,7 +378,7 @@ def solve_grid(
 
 
 def solve_valid_grid(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         method: FillPathCreationMethod,
 ) -> SolutionPathNode:
     """
@@ -398,7 +399,7 @@ def solve_valid_grid(
 
 
 def solve_valid_grid_until_no_trivial_solutions(
-        grid: dict[Coord, Cell]
+        grid: Grid
 ) -> SolutionPathNode:
     """
     Solve a VALID grid until there are no trivial solutions left.
@@ -436,7 +437,7 @@ def create_filled(
     Returns:
         SolutionPathNode: Last node of solution path containing the filled grid.
     """
-    empty_grid: dict[Coord, Cell] = create_empty_grid()
+    empty_grid: Grid = create_empty_grid()
 
     try:
         final: SolutionPathNode = solve_grid(
@@ -457,17 +458,17 @@ def create_filled(
 # hängt an max go back length von node das ist falsch
 def check_if_has_unique_solution(
         node: SolutionPathNode,
-        solution_grid: dict[Coord, Cell]
+        solution_grid: Grid
 ) -> bool:
     if len(node.fill_path) == 0:
         return True
 
     coord: Coord = node.fill_path[0]
 
-    solution_value: int = solution_grid[coord].value
+    solution_value: int = solution_grid.cells[coord].value
 
     allowed_values_without_solution_value: list[int] = [
-        v for v in node.grid[coord].allowed_values if v != solution_value
+        v for v in node.grid.cells[coord].allowed_values if v != solution_value
     ]
 
     fill_path_tail: list[Coord] = [c for c in node.fill_path[1:]]
@@ -489,13 +490,13 @@ def check_if_has_unique_solution(
             try:
                 _: SolutionPathNode = recursively_find_solution(
                     node=start,
-                    depth=0
+                    recursion_depth=0
                 )
                 return False
             except:
                 pass
 
-    next_grid: dict[Coord, Cell] = set_value_in_grid(
+    next_grid: Grid = set_value_in_grid(
         grid=node.grid,
         coord=coord,
         value=solution_value
@@ -514,8 +515,8 @@ def check_if_has_unique_solution(
 
 
 def check_if_has_unique_solution_from_grid(
-        grid: dict[Coord, Cell],
-        solution_grid: dict[Coord, Cell]
+        grid: Grid,
+        solution_grid: Grid
 ) -> bool:
     return check_if_has_unique_solution(
         node=SolutionPathNode(
@@ -530,12 +531,12 @@ def check_if_has_unique_solution_from_grid(
 
 
 def create_partially_filled(
-        filled_grid: dict[Coord, Cell],
+        filled_grid: Grid,
         num_empties: int
 ) -> SolutionPathNode:
     fill_path: list[Coord] = random.sample(all_coords_0_to_80, num_empties)
 
-    grid: dict[Coord, Cell] = remove_values_from_grid(
+    grid: Grid = remove_values_from_grid(
         grid=filled_grid,
         coords=fill_path
     )
@@ -574,10 +575,10 @@ def get_path(node: SolutionPathNode, depth: int) -> list[SolutionPathNode]:
 
 
 def recursively_remove_clues(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         num_remaining_clues: int,
         clues: list[Coord],
-        solution_grid: dict[Coord, Cell],
+        solution_grid: Grid,
         grid_to_remove_threshold: int,
         grid_to_remove: list[tuple[dict[Coord, Cell], Coord]],
         depth: int,
@@ -603,7 +604,7 @@ def recursively_remove_clues(
 
     for remove in shuffled_clues:
         # todo nur ein value removen
-        grid_after_removing: dict[Coord, Cell] = remove_values_from_grid(
+        grid_after_removing: Grid = remove_values_from_grid(
             grid=grid,
             coords=[remove]
         )
@@ -623,7 +624,7 @@ def recursively_remove_clues(
             if len(clues) < grid_to_remove_threshold:
                 grid_to_remove.append(
                     (
-                        grid_after_removing,
+                        grid_after_removing.cells,
                         remove
                     )
                 )

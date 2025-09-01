@@ -8,6 +8,16 @@ class Coord(NamedTuple):
     col_idx: int
 
 
+class Cell(NamedTuple):
+    value: int
+    allowed_values: list[int]
+
+
+class Grid(NamedTuple):
+    cells: dict[Coord, Cell]
+    is_valid: bool
+
+
 def create_all_coords() -> list[Coord]:
     coords: list[Coord] = []
 
@@ -102,11 +112,6 @@ def create_coord_to_all_coords_in_row_col_or_block() -> frozendict[Coord, set[Co
 coord_to_all_coords_in_row_col_or_block = create_coord_to_all_coords_in_row_col_or_block()
 
 
-class Cell(NamedTuple):
-    value: int
-    allowed_values: list[int]
-
-
 def copy_cell_with_new_allowed_values(
         cell: Cell,
         new_allowed_values: list[int]
@@ -127,30 +132,35 @@ def copy_cell(
 
 
 def copy_grid(
-        grid: dict[Coord, Cell]
-) -> dict[Coord, Cell]:
-    return {
-        coord_to_cell[0]: copy_cell(coord_to_cell[1]) for coord_to_cell in grid.items()
-    }
+        grid: Grid
+) -> Grid:
+    return Grid(
+        cells={
+            coord_to_cell[0]: copy_cell(coord_to_cell[1]) for coord_to_cell in grid.cells.items()
+        },
+        is_valid=grid.is_valid
+    )
 
 
-def create_empty_grid() -> dict[Coord, Cell]:
-    return {
-        coord: Cell(
+def create_empty_grid() -> Grid:
+    return Grid(
+        cells={coord: Cell(
             value=0,
             allowed_values=list(range(1, 10))
         ) for coord in all_coords_0_to_80
-    }
+        },
+        is_valid=True
+    )
 
 
 def set_value_in_grid(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         coord: Coord,
         value: int,
-) -> dict[Coord, Cell]:
-    new_grid: dict[Coord, Cell] = copy_grid(grid)
+) -> Grid:
+    news_cells: dict[Coord, Cell] = grid.cells.copy()
 
-    new_grid[coord] = Cell(
+    news_cells[coord] = Cell(
         value=value,
         allowed_values=[]
     )
@@ -159,26 +169,31 @@ def set_value_in_grid(
         coord
     ]
 
+    total_is_valid: bool = grid.is_valid
     for coord_with_changed_allowed_values in coords_in_row_col_or_square:
-        old_cell: Cell = grid[coord_with_changed_allowed_values]
-        new_grid[coord_with_changed_allowed_values] = copy_cell_with_new_allowed_values(
-            cell=old_cell,
-            new_allowed_values=[
-                v for v in old_cell.allowed_values if v != value
-            ]
-        )
+        old_cell: Cell = grid.cells[coord_with_changed_allowed_values]
+        if old_cell.value == 0:
+            new_allowed_values: list[int] = [v for v in old_cell.allowed_values if v != value]
+            news_cells[coord_with_changed_allowed_values] = Cell(
+                value=old_cell.value,
+                allowed_values=new_allowed_values
+            )
+            total_is_valid = total_is_valid and len(new_allowed_values) > 0
 
-    return new_grid
+    return Grid(
+        cells=news_cells,
+        is_valid=total_is_valid
+    )
 
 
 def remove_values_from_grid(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         coords: list[Coord]
-) -> dict[Coord, Cell]:
-    new_grid: dict[Coord, Cell] = copy_grid(grid)
+) -> Grid:
+    new_cells: dict[Coord, Cell] = grid.cells.copy()
 
     for coord in coords:
-        new_grid[coord] = Cell(
+        new_cells[coord] = Cell(
             value=0,
             allowed_values=[]
         )
@@ -192,33 +207,41 @@ def remove_values_from_grid(
 
     all_affected_coords |= set(coords)
 
+    total_is_valid: bool = grid.is_valid
     for affected_coord in all_affected_coords:
-        affected_cell: Cell = new_grid[affected_coord]
+        affected_cell: Cell = new_cells[affected_coord]
 
         if affected_cell.value == 0:
             already_used: set[int] = set(
                 [
-                    new_grid[constrain_coord].value for constrain_coord in
+                    new_cells[constrain_coord].value for constrain_coord in
                     coord_to_all_coords_in_row_col_or_block[affected_coord]
                 ]
             )
-            new_grid[affected_coord] = copy_cell_with_new_allowed_values(
-                cell=new_grid[affected_coord],
-                new_allowed_values=[v for v in range(
-                    1, 10
-                ) if v not in already_used]
+            new_allowed_values = [v for v in range(
+                1, 10
+            ) if v not in already_used]
+
+            total_is_valid = total_is_valid and len(new_allowed_values) > 0
+
+            new_cells[affected_coord] = Cell(
+                value=new_cells[affected_coord].value,
+                allowed_values=new_allowed_values
             )
 
-    return new_grid
+    return Grid(
+        cells=new_cells,
+        is_valid=total_is_valid
+    )
 
 
 def get_random_empty_where_allowed_values_is_len_1(
-        grid: dict[Coord, Cell]
+        grid: Grid
 ) -> Optional[tuple[Coord, Cell]]:
-    new_grid: dict[Coord, Cell] = copy_grid(grid)
+    new_cells: dict[Coord, Cell] = grid.cells.copy()
 
     coord_to_cells: list[tuple[Coord, Cell]] = list(
-        new_grid.items()
+        new_cells.items()
     )
 
     random.shuffle(coord_to_cells)
@@ -256,31 +279,13 @@ def grid_to_str(
     )
 
 
-def is_valid(
-        grid: dict[Coord, Cell]
-) -> bool:
-    for coord in coord_to_all_coords_in_row_col_or_block.keys():
-        values: set[int] = {
-            grid[c].value for c in coord_to_all_coords_in_row_col_or_block[coord]
-        }
-        value = grid[coord].value
-
-        if value == 0 and len(values) == 0:
-            return False
-
-        if value > 0 and value in values:
-            return False
-
-    return True
-
-
 def str_to_grid(
         grid_as_str: str
-) -> dict[Coord, Cell]:
-    if (len(grid_as_str) != 81):
+) -> Grid:
+    if len(grid_as_str) != 81:
         raise ValueError("size must be 81")
 
-    grid: dict[Coord, Cell] = create_empty_grid()
+    grid: Grid = create_empty_grid()
 
     for idx, char in enumerate(grid_as_str):
         row_idx: int = idx // 9
