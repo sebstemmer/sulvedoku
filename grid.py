@@ -302,3 +302,11 @@ def str_to_grid(
             )
 
     return grid
+
+
+def is_solved(grid: dict[Coord, Cell]) -> bool:
+    for coord in all_coords_0_to_80:
+        if grid[coord].value == 0:
+            return False
+
+    return True

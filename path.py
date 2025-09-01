@@ -1,30 +1,25 @@
 from __future__ import annotations
-
-import random
-from enum import Enum
 from typing import NamedTuple, Optional
-
+import random
 from grid import Coord, Cell, create_empty_grid, get_random_empty_where_allowed_values_is_len_1, set_value_in_grid, \
     remove_values_from_grid, all_coords_0_to_80
+from enum import Enum
 
 
 class At(NamedTuple):
     coord: Coord
     value_tries: list[int]
+    fill_path_idx: Optional[int]
     previous_node: SolutionPathNode
     is_trivial: bool
 
 
 class SolutionPathNode(NamedTuple):
-    """
-        max_go_back_depth: Maximum depth of going back when backtracking
-         (None means no maximum depth, -1 means  no backtracking).
-    """
     grid: dict[Coord, Cell]
+    fill_path: list[Coord]
     at: Optional[At]
     recursion_depth: int
     max_go_back_depth: Optional[int]
-    method: FillPathCreationMethod
 
 
 class RemoveCluesResult(NamedTuple):
@@ -35,7 +30,6 @@ class RemoveCluesResult(NamedTuple):
 class FillPathCreationMethod(Enum):
     ORDERED = 1
     RANDOM = 2
-    SMALLEST_ALLOWED = 3
 
 
 class MaxGoBackDepthReached(Exception):
@@ -65,48 +59,49 @@ class MaxRemoveCluesDepthReached(Exception):
         super().__init__()
 
 
-def create_node(
-        node: SolutionPathNode,
+def create_fill_path(
         grid: dict[Coord, Cell],
-        at: Optional[At],
-        recursion_depth: int
-) -> SolutionPathNode:
-    return SolutionPathNode(
-        grid=grid,
-        at=at,
-        recursion_depth=recursion_depth,
-        max_go_back_depth=node.max_go_back_depth,
-        method=node.method,
-    )
+        method: FillPathCreationMethod
+) -> list[Coord]:
+    coords: list[Coord] = [
+        coord
+        for row_idx in range(9)
+        for col_idx in range(9)
+        for coord in [Coord(row_idx=row_idx, col_idx=col_idx)]
+        if grid[coord].value == 0
+    ]
+
+    match method:
+        case FillPathCreationMethod.ORDERED:
+            return coords
+        case FillPathCreationMethod.RANDOM:
+            random.shuffle(coords)
+            return coords
 
 
 def create_start_node(
         grid: dict[Coord, Cell],
-        max_go_back_depth: Optional[int],
-        method: FillPathCreationMethod
+        fill_path: list[Coord],
+        max_go_back_depth: Optional[int]
 ) -> SolutionPathNode:
     return SolutionPathNode(
         grid=grid,
+        fill_path=fill_path,
         at=None,
         recursion_depth=0,
-        max_go_back_depth=max_go_back_depth,
-        method=method
+        max_go_back_depth=max_go_back_depth
     )
 
 
 def find_trivial_solutions(
         node: SolutionPathNode,
-        recursion_depth: int,
+        depth: int,
 ) -> SolutionPathNode:
     """
-        Recursively find trivial solutions, if no more trivial solutions are found, return up-to-date SolutionPathNode.
+    Recursively find trivial solutions, if no more trivial solutions are found, return up-to-date SolutionPathNode.
 
-        Args:
-            node (SolutionPathNode): SolutionPathNode before finding trivial solutions.
-            recursion_depth (int): Current depth of recursion.
-
-        Returns:
-            SolutionPathNode: Node when all trivial solutions are found.
+    :param node: SolutionPathNode before finding trivial solutions.
+    :param depth: Depth of recursion.
     """
     trivial_solution: Optional[
         tuple[Coord, Cell]
@@ -126,45 +121,80 @@ def find_trivial_solutions(
         value=value
     )
 
-    new_node: SolutionPathNode = create_node(
-        node=node,
+    fill_path_idx: Optional[int] = None if node.at is None else node.at.fill_path_idx
+
+    new_path: SolutionPathNode = SolutionPathNode(
         grid=new_grid,
+        fill_path=node.fill_path,
         at=At(
             coord=coord,
             value_tries=[value],
+            fill_path_idx=fill_path_idx,
             previous_node=node,
             is_trivial=True
         ),
-        recursion_depth=recursion_depth,
+        recursion_depth=depth,
+        max_go_back_depth=node.max_go_back_depth
     )
 
     return find_trivial_solutions(
-        node=new_node,
-        recursion_depth=recursion_depth + 1
+        node=new_path,
+        depth=depth + 1
     )
+
+
+def solve_until_no_trivial_solutions(
+        grid: dict[Coord, Cell],
+) -> Optional[dict[Coord, Cell]]:
+    fill_path: list[Coord] = create_fill_path(
+        grid=grid,
+        method=FillPathCreationMethod.ORDERED
+    )
+
+    node: SolutionPathNode = create_start_node(
+        grid=grid,
+        fill_path=fill_path,
+        max_go_back_depth=None
+    )
+
+    after_trivial_solutions: SolutionPathNode = find_trivial_solutions(
+        node=node,
+        depth=0,
+    )
+
+    next_fill_path_idx: Optional[int] = find_next_fill_path_idx(
+        node=after_trivial_solutions
+    )
+
+    if next_fill_path_idx is None:
+        return None
+
+    return after_trivial_solutions.grid
+
+
+def find_next_fill_path_idx(
+        node: SolutionPathNode
+) -> Optional[int]:
+    start: int
+    if node.at is None or node.at.fill_path_idx is None:
+        start = 0
+    else:
+        start = node.at.fill_path_idx + 1
+
+    for idx in range(start, len(node.fill_path)):
+        coord: Coord = node.fill_path[idx]
+
+        if node.grid[coord].value == 0:
+            return idx
+
+    return None
 
 
 def go_back_to_previous_node_and_try_other_value(
         node: SolutionPathNode,
-        recursion_depth: int,
+        depth: int,
         go_back_depth: int,
 ) -> SolutionPathNode:
-    """
-        Backtracking: Goes back to first previous node with still values to try out
-        and continues trying out a new value.
-
-        Args:
-            node (SolutionPathNode): Node to go back from.
-            recursion_depth (int): Current depth of recursion.
-            go_back_depth (int): Current depth of backtracking.
-
-        Returns:
-            SolutionPathNode: Last node of solution path containing the solution grid.
-
-        Raises:
-            MaxGoBackDepthReached: If maximum backtracking depth is reached
-            GoBackFailed: If no solution can be found.
-    """
     if node.max_go_back_depth is not None and go_back_depth > node.max_go_back_depth:
         raise MaxGoBackDepthReached()
 
@@ -184,7 +214,7 @@ def go_back_to_previous_node_and_try_other_value(
     if len(not_yet_tried) == 0:
         return go_back_to_previous_node_and_try_other_value(
             node=at.previous_node,
-            recursion_depth=recursion_depth + 1,
+            depth=depth + 1,
             go_back_depth=go_back_depth + 1,
         )
 
@@ -200,117 +230,50 @@ def go_back_to_previous_node_and_try_other_value(
         value=other_value_try
     )
 
-    other_value_try_node: SolutionPathNode = create_node(
-        node=node,
+    other_value_try_node: SolutionPathNode = SolutionPathNode(
         grid=other_value_try_grid,
+        fill_path=node.fill_path,
         at=At(
             coord=at.coord,
             value_tries=at.value_tries.copy() + [other_value_try],
+            fill_path_idx=at.fill_path_idx,
             previous_node=at.previous_node,
             is_trivial=False
         ),
-        recursion_depth=recursion_depth
+        recursion_depth=depth,
+        max_go_back_depth=node.max_go_back_depth,
     )
 
     return recursively_find_solution(
         node=other_value_try_node,
-        recursion_depth=recursion_depth + 1
+        depth=depth + 1
     )
-
-
-def find_next_coord_and_value(
-        grid: dict[Coord, Cell]
-) -> Optional[tuple[Coord, int]]:
-
-
-def find_next_coord_to_handle_for_ordered(
-        grid: dict[Coord, Cell]
-) -> Optional[Coord]:
-    for coord in all_coords_0_to_80:
-        if grid[coord].value == 0:
-            return coord
-
-    return None
-
-
-def find_next_coord_to_handle_for_random(
-        grid: dict[Coord, Cell]
-) -> Optional[Coord]:
-    all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
-    random.shuffle(all_coords_0_to_80_list)
-    for coord in all_coords_0_to_80_list:
-        if grid[coord].value == 0:
-            return coord
-
-    return None
-
-
-def find_next_coord_to_handle_for_smallest_allowed(
-        grid: dict[Coord, Cell]
-) -> Optional[Coord]:
-    all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
-    random.shuffle(all_coords_0_to_80_list)
-
-    min_num_allowed_values: int = 10
-    coord_to_min_num_allowed_values: Optional[Coord] = None
-
-    for coord in all_coords_0_to_80_list:
-        num_allowed_values: int = len(grid[coord].allowed_values)
-        if grid[coord].value == 0 and num_allowed_values < min_num_allowed_values:
-            min_num_allowed_values = num_allowed_values
-            coord_to_min_num_allowed_values = coord
-
-    return coord_to_min_num_allowed_values
-
-
-def find_next_coord_to_handle(
-        node: SolutionPathNode
-) -> Optional[Coord]:
-    match node.method:
-        case FillPathCreationMethod.ORDERED:
-            return find_next_coord_to_handle_for_ordered(grid=node.grid)
-        case FillPathCreationMethod.RANDOM:
-            return find_next_coord_to_handle_for_random(grid=node.grid)
-        case FillPathCreationMethod.SMALLEST_ALLOWED:
-            return find_next_coord_to_handle_for_smallest_allowed(grid=node.grid)
 
 
 def recursively_find_solution(
         node: SolutionPathNode,
-        recursion_depth: int
+        depth: int
 ) -> SolutionPathNode:
-    """
-    Recursive function to solve a (not necessary valid) grid.
-
-    Args:
-        node (SolutionPathNode): Node that contains the grid and the other parameters to solve.
-        recursion_depth (int): Current depth of recursion.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
-
-    Raises:
-        MaxGoBackDepthReached: If maximum backtracking depth is reached
-        GoBackFailed: If no solution can be found.
-    """
     handled_trivial_solutions: SolutionPathNode = find_trivial_solutions(
         node=node,
-        recursion_depth=recursion_depth + 1
+        depth=depth + 1
     )
 
-    next_coord: Optional[Coord] = find_next_coord_to_handle(
-        handled_trivial_solutions
+    next_fill_path_idx: Optional[int] = find_next_fill_path_idx(
+        node=handled_trivial_solutions
     )
 
-    if next_coord is None:
+    if next_fill_path_idx is None:
         return handled_trivial_solutions
+
+    next_coord: Coord = handled_trivial_solutions.fill_path[next_fill_path_idx]
 
     allowed_values: list[int] = handled_trivial_solutions.grid[next_coord].allowed_values
 
     if len(allowed_values) == 0:
         return go_back_to_previous_node_and_try_other_value(
             node=handled_trivial_solutions,
-            recursion_depth=recursion_depth + 1,
+            depth=depth + 1,
             go_back_depth=0,
         )
 
@@ -326,128 +289,64 @@ def recursively_find_solution(
         value=next_value
     )
 
-    next_node: SolutionPathNode = create_node(
-        node=handled_trivial_solutions,
+    next_node: SolutionPathNode = SolutionPathNode(
         grid=next_grid,
+        fill_path=handled_trivial_solutions.fill_path,
         at=At(
             coord=next_coord,
             value_tries=[next_value],
+            fill_path_idx=next_fill_path_idx,
             previous_node=handled_trivial_solutions,
             is_trivial=False
         ),
-        recursion_depth=recursion_depth
+        recursion_depth=depth,
+        max_go_back_depth=handled_trivial_solutions.max_go_back_depth
     )
 
     return recursively_find_solution(
         node=next_node,
-        recursion_depth=recursion_depth + 1,
+        depth=depth + 1,
     )
 
 
-def solve_grid(
+def recursively_find_solution_from_grid(
         grid: dict[Coord, Cell],
-        max_go_back_depth: Optional[int],
-        method: FillPathCreationMethod
+        method: FillPathCreationMethod,
+        max_go_back_depth: int
 ) -> SolutionPathNode:
-    """
-    Solve a (not necessary valid) grid.
+    fill_path: list[Coord] = create_fill_path(
+        grid=grid,
+        method=method
+    )
 
-    Args:
-        grid (dict[Coord, Cell]): Grid to solve.
-        max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        method (FillPathCreationMethod): Method used for solving.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
-
-    Raises:
-        MaxGoBackDepthReached: If maximum backtracking depth is reached
-        GoBackFailed: If no solution can be found.
-    """
     start: SolutionPathNode = create_start_node(
         grid=grid,
-        max_go_back_depth=max_go_back_depth,
-        method=method
+        fill_path=fill_path,
+        max_go_back_depth=max_go_back_depth
     )
 
     return recursively_find_solution(
         node=start,
-        recursion_depth=0
-    )
-
-
-def solve_valid_grid(
-        grid: dict[Coord, Cell],
-        method: FillPathCreationMethod,
-) -> SolutionPathNode:
-    """
-    Solve a VALID grid.
-
-    Args:
-        grid (dict[Coord, Cell]): Grid to solve.
-        method (FillPathCreationMethod): Method used for solving.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
-    """
-    return solve_grid(
-        grid=grid,
-        max_go_back_depth=None,
-        method=method
-    )
-
-
-def solve_valid_grid_until_no_trivial_solutions(
-        grid: dict[Coord, Cell]
-) -> SolutionPathNode:
-    """
-    Solve a VALID grid until there are no trivial solutions left.
-
-    Args:
-        grid (dict[Coord, Cell]): Grid to solve.
-
-    Returns:
-        SolutionPathNode: Node when all trivial solutions are found.
-    """
-
-    node: SolutionPathNode = create_start_node(
-        grid=grid,
-        max_go_back_depth=None,
-        method=FillPathCreationMethod.ORDERED
-    )
-
-    return find_trivial_solutions(
-        node=node,
-        recursion_depth=0,
+        depth=0
     )
 
 
 def create_filled(
-        max_go_back_depth: Optional[int],
-        method: FillPathCreationMethod
+        method: FillPathCreationMethod,
+        max_go_back_depth: int
 ) -> SolutionPathNode:
-    """
-    Create a filled grid.
-
-    Args:
-        max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        method (FillPathCreationMethod): Method used for creation.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the filled grid.
-    """
     empty_grid: dict[Coord, Cell] = create_empty_grid()
 
     try:
-        final: SolutionPathNode = solve_grid(
+        final: SolutionPathNode = recursively_find_solution_from_grid(
             grid=empty_grid,
-            max_go_back_depth=max_go_back_depth,
             method=method,
+            max_go_back_depth=max_go_back_depth
         )
     except (GoBackFailed, MaxGoBackDepthReached):
         final: SolutionPathNode = create_filled(
-            max_go_back_depth=max_go_back_depth,
-            method=method
+            method=method,
+            max_go_back_depth=max_go_back_depth
         )
 
     return final
@@ -520,10 +419,13 @@ def check_if_has_unique_solution_from_grid(
     return check_if_has_unique_solution(
         node=SolutionPathNode(
             grid=grid,
+            fill_path=create_fill_path(
+                grid=grid,
+                method=FillPathCreationMethod.ORDERED
+            ),
             at=None,
             recursion_depth=0,
-            max_go_back_depth=None,
-            method=FillPathCreationMethod.ORDERED
+            max_go_back_depth=None
         ),
         solution_grid=solution_grid
     )
@@ -608,10 +510,15 @@ def recursively_remove_clues(
             coords=[remove]
         )
 
+        fill_path: list[Coord] = create_fill_path(
+            grid=grid_after_removing,
+            method=FillPathCreationMethod.RANDOM
+        )
+
         node_after_removing: SolutionPathNode = create_start_node(
             grid=grid_after_removing,
-            max_go_back_depth=None,
-            method=FillPathCreationMethod.RANDOM,
+            fill_path=fill_path,
+            max_go_back_depth=None
         )
 
         has_unique_solution: bool = check_if_has_unique_solution(
