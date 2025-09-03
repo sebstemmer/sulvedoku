@@ -268,12 +268,12 @@ def coord_to_str_to_str(
 
 
 def grid_to_str(
-        grid: dict[Coord, Cell],
+        grid: Grid,
         row_join: str,
         col_join: str
 ) -> str:
     return coord_to_str_to_str(
-        coord_to_str=lambda c: str(grid[c].value),
+        coord_to_str=lambda c: str(grid.cells[c].value),
         row_join=row_join,
         col_join=col_join
     )
