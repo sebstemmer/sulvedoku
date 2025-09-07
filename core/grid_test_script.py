@@ -1,6 +1,6 @@
 from typing import Optional
 
-from grid import all_coords_0_to_80, coord_to_all_coords_in_row_col_or_block, get_coords_in_block, \
+from core.grid import all_coords_0_to_80, coord_to_all_coords_in_row_col_or_block, get_coords_in_block, \
     get_coords_in_block_of_coord, copy_grid, set_value_in_grid, \
     create_empty_grid, remove_values_from_grid, get_random_empty_where_allowed_values_is_len_1, Coord, Cell, Grid
 

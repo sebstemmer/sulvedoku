@@ -7,10 +7,14 @@ from typing import NamedTuple, Optional, Callable
 from core.grid import Coord, Cell, create_empty_grid, get_random_empty_where_allowed_values_is_len_1, set_value_in_grid, \
     remove_values_from_grid, all_coords_0_to_80, Grid
 
+import time
+
 
 class At(NamedTuple):
     coord: Coord
-    value_tries: list[int]
+    tries: list[tuple[Coord, int]] | None
+    previous_node: SolutionPathNode
+    is_trivial: bool
     previous_node: SolutionPathNode
     is_trivial: bool
 
@@ -65,7 +69,7 @@ class MaxRemoveCluesDepthReached(Exception):
 
 
 def create_node(
-        node: SolutionPathNode,
+        max_go_back_depth: Optional[int],
         grid: Grid,
         at: Optional[At],
         recursion_depth: int
@@ -74,7 +78,7 @@ def create_node(
         grid=grid,
         at=at,
         recursion_depth=recursion_depth,
-        max_go_back_depth=node.max_go_back_depth
+        max_go_back_depth=max_go_back_depth
     )
 
 
@@ -90,61 +94,88 @@ def create_start_node(
     )
 
 
-def find_trivial_solutions(
+def solve_trivial_solutions(
+        node: SolutionPathNode,
+        recursion_depth: int,
+) -> tuple[SolutionPathNode, bool]:
+    found_trivial_solutions: bool = False
+
+    previous_node = node
+    for coord in node.grid.empty_coords:
+        cell = node.grid.cells[coord]
+        allowed_values = cell.allowed_values
+
+        if len(allowed_values) == 1:
+            found_trivial_solutions = True
+            new_grid = set_value_in_grid(
+                grid=previous_node.grid,
+                coord=coord,
+                value=allowed_values[0]
+            )
+            new_node: SolutionPathNode = create_node(
+                max_go_back_depth=node.max_go_back_depth,
+                grid=new_grid,
+                at=At(
+                    coord=coord,
+                    tries=None,
+                    previous_node=previous_node,
+                    is_trivial=True
+                ),
+                recursion_depth=recursion_depth,
+            )
+            previous_node = new_node
+
+    return previous_node, found_trivial_solutions
+
+
+def recursively_solve_trivial_solutions(
         node: SolutionPathNode,
         recursion_depth: int,
 ) -> SolutionPathNode:
-    """
-        Recursively find trivial solutions, if no more trivial solutions are found, return up-to-date SolutionPathNode.
-
-        Args:
-            node (SolutionPathNode): SolutionPathNode before finding trivial solutions.
-            recursion_depth (int): Current depth of recursion.
-
-        Returns:
-            SolutionPathNode: Node when all trivial solutions are found.
-    """
-    trivial_solution: Optional[
-        tuple[Coord, Cell]
-    ] = get_random_empty_where_allowed_values_is_len_1(
-        grid=node.grid
-    )
-
-    if trivial_solution is None:
-        return node
-
-    coord = trivial_solution[0]
-    value = trivial_solution[1].allowed_values[0]
-
-    new_grid: Grid = set_value_in_grid(
-        grid=node.grid,
-        coord=coord,
-        value=value
-    )
-
-    new_node: SolutionPathNode = create_node(
+    after_find_trivial_solutions, trivial_solutions_solved = solve_trivial_solutions(
         node=node,
-        grid=new_grid,
-        at=At(
-            coord=coord,
-            value_tries=[value],
-            previous_node=node,
-            is_trivial=True
-        ),
-        recursion_depth=recursion_depth,
+        recursion_depth=recursion_depth
     )
 
-    return find_trivial_solutions(
-        node=new_node,
+    if not trivial_solutions_solved:
+        return after_find_trivial_solutions
+
+    return recursively_solve_trivial_solutions(
+        node=after_find_trivial_solutions,
         recursion_depth=recursion_depth + 1
     )
+
+
+def get_complete_solution_path(node: SolutionPathNode) -> list[Coord]:
+    if node.at is None:
+        return []
+
+    return [node.at.coord] + get_complete_solution_path(node.at.previous_node)
+
+
+def try_all_allowed_values_go_back_strategy(
+        coord: Coord,
+        grid: Grid,
+        already_tried: list[tuple[Coord, int]]
+) -> tuple[Coord, int] | None:
+    total_allowed_values: list[int] = get_total_allowed_values(
+        grid=grid,
+        coord=coord,
+        already_tried=already_tried
+    )
+
+    if len(total_allowed_values) == 0:
+        return None
+
+    return coord, random.choice(total_allowed_values)
 
 
 def go_back_to_previous_node_and_try_other_value(
         node: SolutionPathNode,
         recursion_depth: int,
         go_back_depth: int,
-        find_next_coord_and_value: Callable[[Grid], Coord | None]
+        guess_strategy: Callable[[Grid], tuple[Coord, int] | None],
+        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]
 ) -> SolutionPathNode:
     """
         Backtracking: Goes back to first previous node with still values to try out
@@ -154,6 +185,7 @@ def go_back_to_previous_node_and_try_other_value(
             node (SolutionPathNode): Node to go back from.
             recursion_depth (int): Current depth of recursion.
             go_back_depth (int): Current depth of backtracking.
+            guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]): Method for finding next coord and value to handle.
 
         Returns:
             SolutionPathNode: Last node of solution path containing the solution grid.
@@ -165,45 +197,52 @@ def go_back_to_previous_node_and_try_other_value(
     if node.max_go_back_depth is not None and go_back_depth > node.max_go_back_depth:
         raise MaxGoBackDepthReached()
 
-    at: Optional[At] = node.at
+    at: At | None = node.at
 
     if at is None:
         raise GoBackFailed()
 
-    allowed_values: list[int] = at.previous_node.grid.cells[
-        at.coord
-    ].allowed_values
+    # print("go back")
 
-    not_yet_tried: list[int] = [
-        v for v in allowed_values if v not in at.value_tries
-    ]
-
-    if len(not_yet_tried) == 0:
+    if at.is_trivial:
         return go_back_to_previous_node_and_try_other_value(
             node=at.previous_node,
             recursion_depth=recursion_depth + 1,
             go_back_depth=go_back_depth + 1,
-            find_next_coord_and_value=find_next_coord_and_value
+            guess_strategy=guess_strategy,
+            go_back_strategy=go_back_strategy
         )
 
-    random_idx: int = 0 if len(not_yet_tried) == 1 else random.randint(
-        0, len(not_yet_tried) - 1
+    previous_tries: list[tuple[Coord, int]] = list(at.tries)
+
+    # print("use go back strategy")
+    next_try_coord_and_value: tuple[Coord, int] | None = go_back_strategy(
+        at.coord,
+        at.previous_node.grid,
+        previous_tries
     )
 
-    other_value_try: int = not_yet_tried[random_idx]
+    if next_try_coord_and_value is None:
+        return go_back_to_previous_node_and_try_other_value(
+            node=at.previous_node,
+            recursion_depth=recursion_depth + 1,
+            go_back_depth=go_back_depth + 1,
+            guess_strategy=guess_strategy,
+            go_back_strategy=go_back_strategy
+        )
 
-    other_value_try_grid: Grid = set_value_in_grid(
+    next_try_grid: Grid = set_value_in_grid(
         grid=at.previous_node.grid,
-        coord=at.coord,
-        value=other_value_try
+        coord=next_try_coord_and_value[0],
+        value=next_try_coord_and_value[1]
     )
 
-    other_value_try_node: SolutionPathNode = create_node(
-        node=node,
-        grid=other_value_try_grid,
+    next_try_node: SolutionPathNode = create_node(
+        max_go_back_depth=node.max_go_back_depth,
+        grid=next_try_grid,
         at=At(
-            coord=at.coord,
-            value_tries=at.value_tries.copy() + [other_value_try],
+            coord=next_try_coord_and_value[0],
+            tries=previous_tries + [next_try_coord_and_value],
             previous_node=at.previous_node,
             is_trivial=False
         ),
@@ -211,39 +250,37 @@ def go_back_to_previous_node_and_try_other_value(
     )
 
     return recursively_find_solution(
-        node=other_value_try_node,
+        node=next_try_node,
         recursion_depth=recursion_depth + 1,
-        find_next_coord_and_value=find_next_coord_and_value
+        guess_strategy=guess_strategy,
+        go_back_strategy=go_back_strategy
     )
 
 
-def find_next_coord_for_random(
-        grid: Grid
-) -> Optional[Coord]:
-    all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
-    random.shuffle(all_coords_0_to_80_list)
-    for coord in all_coords_0_to_80_list:
-        if grid.cells[coord].value == 0:
-            return coord
+def remove_already_tried_from_allowed_values(
+        allowed_values: list[int],
+        already_tried: list[int]
+) -> list[int]:
+    return [v for v in allowed_values if v not in already_tried]
 
-    return None
+
+def get_total_allowed_values(
+        grid: Grid,
+        coord: Coord,
+        already_tried: list[tuple[Coord, int]]
+) -> list[int]:
+    already_tried_in_coord: set[int] = {a[1] for a in already_tried if a[0] == coord}
+
+    return [a for a in grid.cells[coord].allowed_values if a not in already_tried_in_coord]
 
 
 def find_next_coord_and_value_for_random(
         grid: Grid
 ) -> tuple[Coord, int] | None:
-    return find_next_coord_then_select_random_value(
-        grid=grid,
-        find_next_coord=find_next_coord_for_random
-    )
-
-
-def find_next_coord_for_ordered(
-        grid: Grid
-) -> Coord | None:
-    for coord in all_coords_0_to_80:
-        if grid.cells[coord].value == 0:
-            return coord
+    all_empty_coords: list[Coord] = list(grid.empty_coords)
+    random.shuffle(all_empty_coords)
+    for coord in all_empty_coords:
+        return coord, random.choice(grid.cells[coord].allowed_values)
 
     return None
 
@@ -251,62 +288,42 @@ def find_next_coord_for_ordered(
 def find_next_coord_and_value_for_ordered(
         grid: Grid
 ) -> tuple[Coord, int] | None:
-    return find_next_coord_then_select_random_value(
-        grid=grid,
-        find_next_coord=find_next_coord_for_ordered
-    )
+    all_empty_coords: list[Coord] = list(grid.empty_coords)
+    for coord in all_empty_coords:
+        return coord, random.choice(grid.cells[coord].allowed_values)
 
-
-def find_next_coord_for_smallest_allowed(
-        grid: Grid
-) -> Coord | None:
-    all_coords_0_to_80_list: list[Coord] = list(all_coords_0_to_80)
-    random.shuffle(all_coords_0_to_80_list)
-
-    min_num_allowed_values: int = 10
-    coord_to_min_num_allowed_values: Optional[Coord] = None
-
-    for coord in all_coords_0_to_80_list:
-        num_allowed_values: int = len(grid.cells[coord].allowed_values)
-        if grid.cells[coord].value == 0 and num_allowed_values < min_num_allowed_values:
-            min_num_allowed_values = num_allowed_values
-            coord_to_min_num_allowed_values = coord
-
-    return coord_to_min_num_allowed_values
+    return None
 
 
 def find_next_coord_and_value_for_smallest_allowed(
         grid: Grid
 ) -> tuple[Coord, int] | None:
-    return find_next_coord_then_select_random_value(
-        grid=grid,
-        find_next_coord=find_next_coord_for_smallest_allowed
-    )
+    all_empty_coords: list[Coord] = list(grid.empty_coords)
+    random.shuffle(all_empty_coords)
 
+    min_num_allowed_values: int = 10
+    found_coord: Coord | None = None
+    found_allowed_values: tuple[int, ...] = ()
 
-def find_next_coord_then_select_random_value(
-        grid: Grid,
-        find_next_coord: Callable[[Grid], Coord | None]
-) -> Optional[tuple[Coord, int]]:
-    next_coord: Optional[Coord] = find_next_coord(
-        grid
-    )
+    for coord in all_empty_coords:
+        allowed_values: tuple[int, ...] = grid.cells[coord].allowed_values
+        if min_num_allowed_values > len(allowed_values):
+            min_num_allowed_values = len(allowed_values)
+            found_coord = coord
+            found_allowed_values = allowed_values
 
-    if next_coord is None:
+    if found_coord is None:
         return None
 
-    allowed_values: list[int] = grid.cells[next_coord].allowed_values
-
-    random_idx: int = 0 if len(allowed_values) == 1 else random.randint(
-        0, len(allowed_values) - 1
-    )
-
-    return next_coord, allowed_values[random_idx]
+    return found_coord, random.choice(found_allowed_values)
 
 
 def recursively_find_solution(
         node: SolutionPathNode,
-        find_next_coord_and_value: Callable[[Grid], tuple[Coord, int] | None],
+        guess_strategy: Callable[
+            [Grid], tuple[Coord, int] | None
+        ],
+        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None,
         recursion_depth: int
 ) -> SolutionPathNode:
     """
@@ -314,6 +331,7 @@ def recursively_find_solution(
 
     Args:
         node (SolutionPathNode): Node that contains the grid and the other parameters to solve.
+        guess_strategy (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coord and value to handle.
         recursion_depth (int): Current depth of recursion.
 
     Returns:
@@ -323,36 +341,45 @@ def recursively_find_solution(
         MaxGoBackDepthReached: If maximum backtracking depth is reached
         GoBackFailed: If no solution can be found.
     """
-    handled_trivial_solutions: SolutionPathNode = find_trivial_solutions(
+
+    start_handle_trivial = time.perf_counter()
+    handled_trivial_solutions: SolutionPathNode = recursively_solve_trivial_solutions(
         node=node,
         recursion_depth=recursion_depth + 1
     )
+    # print(f"handle trivial solutions took {1000 * (time.perf_counter() - start_handle_trivial)} ms")
 
     if not handled_trivial_solutions.grid.is_valid:
         return go_back_to_previous_node_and_try_other_value(
             node=handled_trivial_solutions,
             recursion_depth=recursion_depth + 1,
             go_back_depth=0,
-            find_next_coord_and_value=find_next_coord_and_value,
+            guess_strategy=guess_strategy,
+            go_back_strategy=go_back_strategy
         )
 
-    next_coord_and_value: Optional[tuple[Coord, int]] = find_next_coord_and_value(handled_trivial_solutions.grid)
+    next_coord_and_value: tuple[Coord, int] | None = guess_strategy(
+        handled_trivial_solutions.grid
+    )
 
     if next_coord_and_value is None:
         return handled_trivial_solutions
 
+    # print("make a guess")
+    set_value_start = time.perf_counter()
     next_grid: Grid = set_value_in_grid(
         grid=handled_trivial_solutions.grid,
         coord=next_coord_and_value[0],
         value=next_coord_and_value[1]
     )
+    # print(f"set value in grid took {1000 * (time.perf_counter() - set_value_start)} ms")
 
     next_node: SolutionPathNode = create_node(
-        node=handled_trivial_solutions,
+        max_go_back_depth=handled_trivial_solutions.max_go_back_depth,
         grid=next_grid,
         at=At(
             coord=next_coord_and_value[0],
-            value_tries=[next_coord_and_value[1]],
+            tries=[(next_coord_and_value[0], next_coord_and_value[1])],
             previous_node=handled_trivial_solutions,
             is_trivial=False
         ),
@@ -361,15 +388,19 @@ def recursively_find_solution(
 
     return recursively_find_solution(
         node=next_node,
-        find_next_coord_and_value=find_next_coord_and_value,
+        guess_strategy=guess_strategy,
         recursion_depth=recursion_depth + 1,
+        go_back_strategy=go_back_strategy
     )
 
 
 def solve_grid(
         grid: Grid,
         max_go_back_depth: Optional[int],
-        find_next_coord_and_value: Callable[[Grid], tuple[Coord, int] | None]
+        guess_strategy: Callable[
+            [Grid], tuple[Coord, int] | None
+        ],
+        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None
 ) -> SolutionPathNode:
     """
     Solve a (not necessary valid) grid.
@@ -377,7 +408,7 @@ def solve_grid(
     Args:
         grid (Grid): Grid to solve.
         max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        find_next_coord_and_value (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coordinate and value to handle.
+        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]): Method for finding next coord and value to handle.
 
     Returns:
         SolutionPathNode: Last node of solution path containing the solution grid.
@@ -393,21 +424,23 @@ def solve_grid(
 
     return recursively_find_solution(
         node=start,
-        find_next_coord_and_value=find_next_coord_and_value,
-        recursion_depth=0
+        guess_strategy=guess_strategy,
+        recursion_depth=0,
+        go_back_strategy=go_back_strategy
     )
 
 
 def solve_valid_grid(
         grid: Grid,
-        find_next_coord_and_value: Callable[[Grid], tuple[Coord, int]] | None
+        guess_strategy: Callable[[Grid], tuple[Coord, int]] | None,
+        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None,
 ) -> SolutionPathNode:
     """
     Solve a VALID grid.
 
     Args:
         grid (dict[Coord, Cell]): Grid to solve.
-        find_next_coord_and_value (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coordinate and value to handle.
+        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], Optional[tuple[Coord, int]]]): Method for finding next coordinate and value to handle.
 
     Returns:
         SolutionPathNode: Last node of solution path containing the solution grid.
@@ -415,7 +448,8 @@ def solve_valid_grid(
     return solve_grid(
         grid=grid,
         max_go_back_depth=None,
-        find_next_coord_and_value=find_next_coord_and_value,
+        guess_strategy=guess_strategy,
+        go_back_strategy=go_back_strategy
     )
 
 
@@ -437,7 +471,7 @@ def solve_valid_grid_until_no_trivial_solutions(
         max_go_back_depth=None
     )
 
-    return find_trivial_solutions(
+    return recursively_solve_trivial_solutions(
         node=node,
         recursion_depth=0,
     )
@@ -445,14 +479,15 @@ def solve_valid_grid_until_no_trivial_solutions(
 
 def create_filled(
         max_go_back_depth: Optional[int],
-        find_next_coord_and_value: Callable[[Grid], tuple[Coord, int] | None]
+        guess_strategy: Callable[[Grid], tuple[Coord, int] | None],
+        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None
 ) -> SolutionPathNode:
     """
     Create a filled grid.
 
     Args:
         max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        find_next_coord_and_value (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coordinate and value to handle.
+        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], Optional[tuple[Coord, int]]]): Method for finding next coord and value to handle.
 
     Returns:
         SolutionPathNode: Last node of solution path containing the filled grid.
@@ -463,12 +498,14 @@ def create_filled(
         final: SolutionPathNode = solve_grid(
             grid=empty_grid,
             max_go_back_depth=max_go_back_depth,
-            find_next_coord_and_value=find_next_coord_and_value
+            guess_strategy=guess_strategy,
+            go_back_strategy=go_back_strategy
         )
     except (GoBackFailed, MaxGoBackDepthReached):
         final: SolutionPathNode = create_filled(
             max_go_back_depth=max_go_back_depth,
-            find_next_coord_and_value=find_next_coord_and_value
+            guess_strategy=guess_strategy,
+            go_back_strategy=go_back_strategy
         )
 
     return final
