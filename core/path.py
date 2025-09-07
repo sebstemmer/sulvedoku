@@ -4,15 +4,13 @@ import random
 from enum import Enum
 from typing import NamedTuple, Optional, Callable
 
-from core.grid import Coord, Cell, create_empty_grid, get_random_empty_where_allowed_values_is_len_1, set_value_in_grid, \
+from core.grid import Coord, Cell, create_empty_grid, set_value_in_grid, \
     remove_values_from_grid, all_coords_0_to_80, Grid
-
-import time
 
 
 class At(NamedTuple):
     coord: Coord
-    tries: list[tuple[Coord, int]] | None
+    tries: tuple[int, ...]
     previous_node: SolutionPathNode
     is_trivial: bool
     previous_node: SolutionPathNode
@@ -26,7 +24,6 @@ class SolutionPathNode(NamedTuple):
     """
     grid: Grid
     at: Optional[At]
-    recursion_depth: int
     max_go_back_depth: Optional[int]
 
 
@@ -71,13 +68,11 @@ class MaxRemoveCluesDepthReached(Exception):
 def create_node(
         max_go_back_depth: Optional[int],
         grid: Grid,
-        at: Optional[At],
-        recursion_depth: int
+        at: Optional[At]
 ) -> SolutionPathNode:
     return SolutionPathNode(
         grid=grid,
         at=at,
-        recursion_depth=recursion_depth,
         max_go_back_depth=max_go_back_depth
     )
 
@@ -89,15 +84,13 @@ def create_start_node(
     return SolutionPathNode(
         grid=grid,
         at=None,
-        recursion_depth=0,
         max_go_back_depth=max_go_back_depth
     )
 
 
 def solve_trivial_solutions(
-        node: SolutionPathNode,
-        recursion_depth: int,
-) -> tuple[SolutionPathNode, bool]:
+        node: SolutionPathNode
+) -> tuple[SolutionPathNode, bool] | None:
     found_trivial_solutions: bool = False
 
     previous_node = node
@@ -107,21 +100,24 @@ def solve_trivial_solutions(
 
         if len(allowed_values) == 1:
             found_trivial_solutions = True
-            new_grid = set_value_in_grid(
+            new_grid: Grid | None = set_value_in_grid(
                 grid=previous_node.grid,
                 coord=coord,
                 value=allowed_values[0]
             )
+
+            if new_grid is None:
+                return None
+
             new_node: SolutionPathNode = create_node(
                 max_go_back_depth=node.max_go_back_depth,
                 grid=new_grid,
                 at=At(
                     coord=coord,
-                    tries=None,
+                    tries=(allowed_values[0],),
                     previous_node=previous_node,
                     is_trivial=True
-                ),
-                recursion_depth=recursion_depth,
+                )
             )
             previous_node = new_node
 
@@ -129,20 +125,22 @@ def solve_trivial_solutions(
 
 
 def recursively_solve_trivial_solutions(
-        node: SolutionPathNode,
-        recursion_depth: int,
-) -> SolutionPathNode:
-    after_find_trivial_solutions, trivial_solutions_solved = solve_trivial_solutions(
-        node=node,
-        recursion_depth=recursion_depth
+        node: SolutionPathNode
+) -> SolutionPathNode | None:
+    solved_trivial_solutions: tuple[SolutionPathNode, bool] | None = solve_trivial_solutions(
+        node=node
     )
+
+    if solved_trivial_solutions is None:
+        return None
+
+    after_find_trivial_solutions, trivial_solutions_solved = solved_trivial_solutions
 
     if not trivial_solutions_solved:
         return after_find_trivial_solutions
 
     return recursively_solve_trivial_solutions(
-        node=after_find_trivial_solutions,
-        recursion_depth=recursion_depth + 1
+        node=after_find_trivial_solutions
     )
 
 
@@ -153,107 +151,89 @@ def get_complete_solution_path(node: SolutionPathNode) -> list[Coord]:
     return [node.at.coord] + get_complete_solution_path(node.at.previous_node)
 
 
-def try_all_allowed_values_go_back_strategy(
+def try_other_value(
         coord: Coord,
         grid: Grid,
-        already_tried: list[tuple[Coord, int]]
-) -> tuple[Coord, int] | None:
-    total_allowed_values: list[int] = get_total_allowed_values(
+        already_tried: tuple[int, ...],
+        node: SolutionPathNode,
+        guess_strategy: Callable[[Grid], tuple[Coord, int] | None]
+) -> SolutionPathNode:
+    allowed_values: tuple[int, ...] = grid.cells[coord].allowed_values
+
+    possible_values: list[int] = [a for a in allowed_values if a not in already_tried]
+
+    if len(possible_values) == 0:
+        return go_back_to_previous_node_and_try_other_value(
+            node=node,
+            go_back_depth=0,
+            guess_strategy=guess_strategy
+        )
+
+    next_try: int = random.choice(possible_values)
+
+    next_try_grid: Grid | None = set_value_in_grid(
         grid=grid,
         coord=coord,
-        already_tried=already_tried
+        value=next_try
     )
 
-    if len(total_allowed_values) == 0:
-        return None
+    new_already_tried: tuple[int, ...] = already_tried + (next_try,)
 
-    return coord, random.choice(total_allowed_values)
-
-
-def go_back_to_previous_node_and_try_other_value(
-        node: SolutionPathNode,
-        recursion_depth: int,
-        go_back_depth: int,
-        guess_strategy: Callable[[Grid], tuple[Coord, int] | None],
-        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]
-) -> SolutionPathNode:
-    """
-        Backtracking: Goes back to first previous node with still values to try out
-        and continues trying out a new value.
-
-        Args:
-            node (SolutionPathNode): Node to go back from.
-            recursion_depth (int): Current depth of recursion.
-            go_back_depth (int): Current depth of backtracking.
-            guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]): Method for finding next coord and value to handle.
-
-        Returns:
-            SolutionPathNode: Last node of solution path containing the solution grid.
-
-        Raises:
-            MaxGoBackDepthReached: If maximum backtracking depth is reached
-            GoBackFailed: If no solution can be found.
-    """
-    if node.max_go_back_depth is not None and go_back_depth > node.max_go_back_depth:
-        raise MaxGoBackDepthReached()
-
-    at: At | None = node.at
-
-    if at is None:
-        raise GoBackFailed()
-
-    # print("go back")
-
-    if at.is_trivial:
-        return go_back_to_previous_node_and_try_other_value(
-            node=at.previous_node,
-            recursion_depth=recursion_depth + 1,
-            go_back_depth=go_back_depth + 1,
-            guess_strategy=guess_strategy,
-            go_back_strategy=go_back_strategy
+    if next_try_grid is None:
+        return try_other_value(
+            coord=coord,
+            grid=grid,
+            already_tried=new_already_tried,
+            node=node,
+            guess_strategy=guess_strategy
         )
-
-    previous_tries: list[tuple[Coord, int]] = list(at.tries)
-
-    # print("use go back strategy")
-    next_try_coord_and_value: tuple[Coord, int] | None = go_back_strategy(
-        at.coord,
-        at.previous_node.grid,
-        previous_tries
-    )
-
-    if next_try_coord_and_value is None:
-        return go_back_to_previous_node_and_try_other_value(
-            node=at.previous_node,
-            recursion_depth=recursion_depth + 1,
-            go_back_depth=go_back_depth + 1,
-            guess_strategy=guess_strategy,
-            go_back_strategy=go_back_strategy
-        )
-
-    next_try_grid: Grid = set_value_in_grid(
-        grid=at.previous_node.grid,
-        coord=next_try_coord_and_value[0],
-        value=next_try_coord_and_value[1]
-    )
 
     next_try_node: SolutionPathNode = create_node(
         max_go_back_depth=node.max_go_back_depth,
         grid=next_try_grid,
         at=At(
-            coord=next_try_coord_and_value[0],
-            tries=previous_tries + [next_try_coord_and_value],
-            previous_node=at.previous_node,
+            coord=coord,
+            tries=new_already_tried,
+            previous_node=node,
             is_trivial=False
-        ),
-        recursion_depth=recursion_depth
+        )
     )
 
     return recursively_find_solution(
         node=next_try_node,
-        recursion_depth=recursion_depth + 1,
-        guess_strategy=guess_strategy,
-        go_back_strategy=go_back_strategy
+        guess_strategy=guess_strategy
+    )
+
+
+def go_back_to_previous_node_and_try_other_value(
+        node: SolutionPathNode,
+        go_back_depth: int,
+        guess_strategy: Callable[[Grid], tuple[Coord, int] | None]
+) -> SolutionPathNode:
+    if node.max_go_back_depth is not None and go_back_depth > node.max_go_back_depth:
+        raise MaxGoBackDepthReached()
+
+    at: At | None = node.at
+
+    if node.at is None:
+        raise GoBackFailed()
+
+    if at.is_trivial:
+        return go_back_to_previous_node_and_try_other_value(
+            node=at.previous_node,
+            go_back_depth=go_back_depth + 1,
+            guess_strategy=guess_strategy
+        )
+
+    # if at.previous_node.at is None:
+    #    raise GoBackFailed()
+
+    return try_other_value(
+        coord=at.coord,
+        grid=at.previous_node.grid,
+        already_tried=at.tries,
+        node=node.at.previous_node,
+        guess_strategy=guess_strategy
     )
 
 
@@ -307,7 +287,13 @@ def find_next_coord_and_value_for_smallest_allowed(
 
     for coord in all_empty_coords:
         allowed_values: tuple[int, ...] = grid.cells[coord].allowed_values
-        if min_num_allowed_values > len(allowed_values):
+
+        len_allowed_values: int = len(allowed_values)
+
+        if len_allowed_values == 1:
+            return coord, allowed_values[0]
+
+        if min_num_allowed_values > len_allowed_values:
             min_num_allowed_values = len(allowed_values)
             found_coord = coord
             found_allowed_values = allowed_values
@@ -315,16 +301,14 @@ def find_next_coord_and_value_for_smallest_allowed(
     if found_coord is None:
         return None
 
-    return found_coord, random.choice(found_allowed_values)
+    return found_coord, found_allowed_values[0]
 
 
 def recursively_find_solution(
         node: SolutionPathNode,
         guess_strategy: Callable[
             [Grid], tuple[Coord, int] | None
-        ],
-        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None,
-        recursion_depth: int
+        ]
 ) -> SolutionPathNode:
     """
     Recursive function to solve a (not necessary valid) grid.
@@ -332,7 +316,6 @@ def recursively_find_solution(
     Args:
         node (SolutionPathNode): Node that contains the grid and the other parameters to solve.
         guess_strategy (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coord and value to handle.
-        recursion_depth (int): Current depth of recursion.
 
     Returns:
         SolutionPathNode: Last node of solution path containing the solution grid.
@@ -342,20 +325,15 @@ def recursively_find_solution(
         GoBackFailed: If no solution can be found.
     """
 
-    start_handle_trivial = time.perf_counter()
-    handled_trivial_solutions: SolutionPathNode = recursively_solve_trivial_solutions(
-        node=node,
-        recursion_depth=recursion_depth + 1
+    handled_trivial_solutions: SolutionPathNode | None = recursively_solve_trivial_solutions(
+        node=node
     )
-    # print(f"handle trivial solutions took {1000 * (time.perf_counter() - start_handle_trivial)} ms")
 
-    if not handled_trivial_solutions.grid.is_valid:
+    if handled_trivial_solutions is None:
         return go_back_to_previous_node_and_try_other_value(
-            node=handled_trivial_solutions,
-            recursion_depth=recursion_depth + 1,
+            node=node,
             go_back_depth=0,
             guess_strategy=guess_strategy,
-            go_back_strategy=go_back_strategy
         )
 
     next_coord_and_value: tuple[Coord, int] | None = guess_strategy(
@@ -365,32 +343,37 @@ def recursively_find_solution(
     if next_coord_and_value is None:
         return handled_trivial_solutions
 
-    # print("make a guess")
-    set_value_start = time.perf_counter()
-    next_grid: Grid = set_value_in_grid(
+    next_grid: Grid | None = set_value_in_grid(
         grid=handled_trivial_solutions.grid,
         coord=next_coord_and_value[0],
         value=next_coord_and_value[1]
     )
-    # print(f"set value in grid took {1000 * (time.perf_counter() - set_value_start)} ms")
+
+    already_tried: tuple[int, ...] = (next_coord_and_value[1],)
+
+    if next_grid is None:
+        return try_other_value(
+            coord=next_coord_and_value[0],
+            grid=handled_trivial_solutions.grid,
+            already_tried=already_tried,
+            node=handled_trivial_solutions,
+            guess_strategy=guess_strategy,
+        )
 
     next_node: SolutionPathNode = create_node(
         max_go_back_depth=handled_trivial_solutions.max_go_back_depth,
         grid=next_grid,
         at=At(
             coord=next_coord_and_value[0],
-            tries=[(next_coord_and_value[0], next_coord_and_value[1])],
+            tries=already_tried,
             previous_node=handled_trivial_solutions,
             is_trivial=False
-        ),
-        recursion_depth=recursion_depth
+        )
     )
 
     return recursively_find_solution(
         node=next_node,
-        guess_strategy=guess_strategy,
-        recursion_depth=recursion_depth + 1,
-        go_back_strategy=go_back_strategy
+        guess_strategy=guess_strategy
     )
 
 
@@ -400,7 +383,6 @@ def solve_grid(
         guess_strategy: Callable[
             [Grid], tuple[Coord, int] | None
         ],
-        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None
 ) -> SolutionPathNode:
     """
     Solve a (not necessary valid) grid.
@@ -424,16 +406,13 @@ def solve_grid(
 
     return recursively_find_solution(
         node=start,
-        guess_strategy=guess_strategy,
-        recursion_depth=0,
-        go_back_strategy=go_back_strategy
+        guess_strategy=guess_strategy
     )
 
 
 def solve_valid_grid(
         grid: Grid,
-        guess_strategy: Callable[[Grid], tuple[Coord, int]] | None,
-        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None,
+        guess_strategy: Callable[[Grid], tuple[Coord, int]] | None
 ) -> SolutionPathNode:
     """
     Solve a VALID grid.
@@ -448,8 +427,7 @@ def solve_valid_grid(
     return solve_grid(
         grid=grid,
         max_go_back_depth=None,
-        guess_strategy=guess_strategy,
-        go_back_strategy=go_back_strategy
+        guess_strategy=guess_strategy
     )
 
 
@@ -471,16 +449,19 @@ def solve_valid_grid_until_no_trivial_solutions(
         max_go_back_depth=None
     )
 
-    return recursively_solve_trivial_solutions(
-        node=node,
-        recursion_depth=0,
+    solved_trivial_solutions: SolutionPathNode | None = recursively_solve_trivial_solutions(
+        node=node
     )
+
+    if solved_trivial_solutions is None:
+        raise ValueError("grid is not valid")
+
+    return solved_trivial_solutions
 
 
 def create_filled(
         max_go_back_depth: Optional[int],
-        guess_strategy: Callable[[Grid], tuple[Coord, int] | None],
-        go_back_strategy: Callable[[Coord, Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None] | None
+        guess_strategy: Callable[[Grid], tuple[Coord, int] | None]
 ) -> SolutionPathNode:
     """
     Create a filled grid.
@@ -498,14 +479,12 @@ def create_filled(
         final: SolutionPathNode = solve_grid(
             grid=empty_grid,
             max_go_back_depth=max_go_back_depth,
-            guess_strategy=guess_strategy,
-            go_back_strategy=go_back_strategy
+            guess_strategy=guess_strategy
         )
     except (GoBackFailed, MaxGoBackDepthReached):
         final: SolutionPathNode = create_filled(
             max_go_back_depth=max_go_back_depth,
-            guess_strategy=guess_strategy,
-            go_back_strategy=go_back_strategy
+            guess_strategy=guess_strategy
         )
 
     return final
@@ -546,8 +525,7 @@ def check_if_has_unique_solution(
 
             try:
                 _: SolutionPathNode = recursively_find_solution(
-                    node=start,
-                    recursion_depth=0
+                    node=start
                 )
                 return False
             except:
@@ -579,7 +557,6 @@ def check_if_has_unique_solution_from_grid(
         node=SolutionPathNode(
             grid=grid,
             at=None,
-            recursion_depth=0,
             max_go_back_depth=None,
             method=FillPathCreationMethod.ORDERED
         ),
