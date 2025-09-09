@@ -14,8 +14,8 @@ class Cell(NamedTuple):
 
 
 class Grid(NamedTuple):
-    cells: dict[Coord, Cell]
-    empty_coords: tuple[Coord, ...]
+    cells: frozendict[Coord, Cell]
+    empty_coords: tuple[Coord, ...]  # todo in solution path
 
 
 def create_all_coords() -> list[Coord]:
@@ -116,20 +116,20 @@ def copy_grid(
         grid: Grid
 ) -> Grid:
     return Grid(
-        cells={
+        cells=frozendict({
             coord_to_cell[0]: Cell(*coord_to_cell[1]) for coord_to_cell in grid.cells.items()
-        },
+        }),
         empty_coords=grid.empty_coords
     )
 
 
 def create_empty_grid() -> Grid:
     return Grid(
-        cells={coord: Cell(
+        cells=frozendict({coord: Cell(
             value=0,
             allowed_values=tuple(range(1, 10))
         ) for coord in all_coords_0_to_80
-        },
+        }),
         empty_coords=all_coords_0_to_80
     )
 
@@ -139,7 +139,7 @@ def set_value_in_grid(
         coord: Coord,
         value: int,
 ) -> Grid | None:
-    news_cells: dict[Coord, Cell] = grid.cells.copy()
+    news_cells: dict[Coord, Cell] = dict(grid.cells.copy())
 
     news_cells[coord] = Cell(
         value=value,
@@ -166,8 +166,47 @@ def set_value_in_grid(
             )
 
     return Grid(
-        cells=news_cells,
+        cells=frozendict(news_cells),
         empty_coords=tuple([c for c in grid.empty_coords if c != coord])
+    )
+
+
+def remove_value_from_grid(
+        grid: Grid,
+        coord: Coord
+) -> Grid:
+    new_cells: dict[Coord, Cell] = dict(grid.cells.copy())
+
+    new_cells[coord] = Cell(
+        value=0,
+        allowed_values=()
+    )
+
+    affected_coords: set[Coord] = coord_to_all_coords_in_row_col_or_block[coord] | {coord}
+
+    for affected_coord in affected_coords:
+        affected_cell: Cell = new_cells[affected_coord]
+
+        if affected_cell.value == 0:
+            already_used: set[int] = set(
+                [
+                    new_cells[constrain_coord].value for constrain_coord in
+                    coord_to_all_coords_in_row_col_or_block[affected_coord]
+                ]
+            )
+
+            new_allowed_values: tuple[int, ...] = tuple([v for v in range(
+                1, 10
+            ) if v not in already_used])
+
+            new_cells[affected_coord] = Cell(
+                value=new_cells[affected_coord].value,
+                allowed_values=new_allowed_values
+            )
+
+    return Grid(
+        cells=frozendict(new_cells),
+        empty_coords=grid.empty_coords + (coord,)
     )
 
 
@@ -175,7 +214,7 @@ def remove_values_from_grid(
         grid: Grid,
         coords: list[Coord]
 ) -> Grid:
-    new_cells: dict[Coord, Cell] = grid.cells.copy()
+    new_cells: dict[Coord, Cell] = dict(grid.cells.copy())
 
     for coord in coords:
         new_cells[coord] = Cell(

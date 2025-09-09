@@ -13,8 +13,6 @@ class At(NamedTuple):
     tries: tuple[int, ...]
     previous_node: SolutionPathNode
     is_trivial: bool
-    previous_node: SolutionPathNode
-    is_trivial: bool
 
 
 class SolutionPathNode(NamedTuple):
@@ -24,12 +22,7 @@ class SolutionPathNode(NamedTuple):
     """
     grid: Grid
     at: Optional[At]
-    max_go_back_depth: Optional[int]
-
-
-class RemoveCluesResult(NamedTuple):
-    grid: Grid
-    depth: int
+    max_go_back_depth: Optional[int]  # todo in function
 
 
 class FillPathCreationMethod(Enum):
@@ -42,6 +35,7 @@ class MaxGoBackDepthReached(Exception):
     pass
 
 
+# todo: rename no solution found
 class GoBackFailed(Exception):
     pass
 
@@ -154,7 +148,7 @@ def get_complete_solution_path(node: SolutionPathNode) -> list[Coord]:
 def try_other_value(
         coord: Coord,
         grid: Grid,
-        already_tried: tuple[int, ...],
+        already_tried: tuple[int, ...], # set
         node: SolutionPathNode,
         guess_strategy: Callable[[Grid], tuple[Coord, int] | None]
 ) -> SolutionPathNode:
@@ -254,6 +248,7 @@ def get_total_allowed_values(
     return [a for a in grid.cells[coord].allowed_values if a not in already_tried_in_coord]
 
 
+# todo random choice vs random shuffle
 def find_next_coord_and_value_for_random(
         grid: Grid
 ) -> tuple[Coord, int] | None:
@@ -278,6 +273,9 @@ def find_next_coord_and_value_for_ordered(
 def find_next_coord_and_value_for_smallest_allowed(
         grid: Grid
 ) -> tuple[Coord, int] | None:
+    if grid.empty_coords is None:
+        return None
+
     all_empty_coords: list[Coord] = list(grid.empty_coords)
     random.shuffle(all_empty_coords)
 
@@ -298,7 +296,7 @@ def find_next_coord_and_value_for_smallest_allowed(
             found_coord = coord
             found_allowed_values = allowed_values
 
-    if found_coord is None:
+    if found_coord is None or min_num_allowed_values == 10:
         return None
 
     return found_coord, found_allowed_values[0]
@@ -409,7 +407,7 @@ def solve_grid(
         guess_strategy=guess_strategy
     )
 
-
+# todo: useless
 def solve_valid_grid(
         grid: Grid,
         guess_strategy: Callable[[Grid], tuple[Coord, int]] | None
@@ -615,26 +613,26 @@ def recursively_remove_clues(
         solution_grid: Grid,
         grid_to_remove_threshold: int,
         grid_to_remove: list[tuple[dict[Coord, Cell], Coord]],
-        depth: int,
-        max_depth: int
+        recursion_depth: int,
+        max_recursion_depth: int
 ) -> RemoveCluesResult:
-    if depth > max_depth:
+    if recursion_depth > max_recursion_depth:
         raise MaxRemoveCluesDepthReached(
             grid_to_remove=grid_to_remove
         )
 
     print(f"num clues: {len(clues)}")
-    print(f"depth: {depth}")
+    print(f"depth: {recursion_depth}")
     if len(clues) == num_remaining_clues:
         return RemoveCluesResult(
             grid=grid,
-            depth=depth
+            depth=recursion_depth
         )
 
     shuffled_clues: list[Coord] = list(clues)
     random.shuffle(shuffled_clues)
 
-    for_depth: int = depth
+    for_depth: int = recursion_depth
 
     for remove in shuffled_clues:
         # todo nur ein value removen
@@ -671,8 +669,8 @@ def recursively_remove_clues(
                     solution_grid=solution_grid,
                     grid_to_remove_threshold=grid_to_remove_threshold,
                     grid_to_remove=grid_to_remove,
-                    depth=for_depth + 1,
-                    max_depth=max_depth
+                    recursion_depth=for_depth + 1,
+                    max_recursion_depth=max_recursion_depth
                 )
                 return result
             except SolutionNotUnique as s:
@@ -702,6 +700,6 @@ def create_partially_filled_from_creation_path(
         solution_grid=filled.grid,
         grid_to_remove_threshold=grid_to_remove_threshold,
         grid_to_remove=grid_to_remove,
-        depth=0,
-        max_depth=max_depth
+        recursion_depth=0,
+        max_recursion_depth=max_depth
     )
