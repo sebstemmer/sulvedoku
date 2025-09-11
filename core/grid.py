@@ -32,7 +32,6 @@ class Cell(NamedTuple):
     allowed_values: tuple[int, ...]
 
 
-# todo : unsortiert besser, lieber in guess strategy ordered sortieren + choicoe verwencen
 class Grid(NamedTuple):
     """
         Sudoku.
@@ -183,7 +182,8 @@ def create_coord_to_all_coords_in_row_col_or_block() -> frozendict[Coord, set[Co
         this coordinate (excluding the coordinate under consideration).
 
         Returns:
-            frozendict[Coord, set[Coord]]: Coordinate to set of coordinates constraining it (excluding itself).
+            frozendict[Coord, set[Coord]]:
+                Coordinate to set of coordinates constraining it (excluding itself).
     """
     coord_to_all_coords_in_row_col_or_block: dict[
         Coord, set[Coord]
@@ -250,12 +250,26 @@ def create_empty_grid() -> Grid:
     )
 
 
-def remove_coord_from_empty_or_filled_coords(
+def remove_coord_from_coords(
         coord: Coord,
-        empty_or_filled_coords: tuple[Coord, ...]
+        coords: tuple[Coord, ...]
 ) -> tuple[Coord, ...]:
-    coord_idx = empty_or_filled_coords.index(coord)
-    return empty_or_filled_coords[:coord_idx] + empty_or_filled_coords[coord_idx + 1:]
+    """
+        Remove coordinate (first found) from tuple of coordinates.
+
+        Args:
+            coord (Coord):
+                Coordinate to remove.
+            coords (tuple[Coord, ...]):
+                Coordinates to remove coordinate from.
+
+
+        Returns:
+            tuple[Coord, ...]:
+                Coordinates without first found instance of coordinate.
+    """
+    coord_idx = coords.index(coord)
+    return coords[:coord_idx] + coords[coord_idx + 1:]
 
 
 def set_value_in_grid(
@@ -264,10 +278,19 @@ def set_value_in_grid(
         value: int,
 ) -> Grid | None:
     """
-        Create an empty grid.
+        Set value in grid. Recalculate allowed values for affected cells.
+
+        Args:
+            grid (Grid):
+                Grid in which to set value.
+            coord (Coord):
+                Coordinate to set value.
+            value (int):
+                Value to be set. Must be from 1 (incl.) to 9 (incl.).
 
         Returns:
-            Grid: Empty grid.
+            Grid | None:
+                Grid after setting value. None if sudoku is now invalid.
     """
     news_cells: dict[Coord, Cell] = dict(grid.cells)
 
@@ -297,9 +320,9 @@ def set_value_in_grid(
 
     return Grid(
         cells=frozendict(news_cells),
-        empty_coords=remove_coord_from_empty_or_filled_coords(
+        empty_coords=remove_coord_from_coords(
             coord=coord,
-            empty_or_filled_coords=grid.empty_coords
+            coords=grid.empty_coords
         ),
         filled_coords=grid.filled_coords + (coord,)
     )
@@ -309,6 +332,19 @@ def remove_value_from_grid(
         grid: Grid,
         coord: Coord
 ) -> Grid:
+    """
+        Remove value from grid. Recalculate allowed values for affected cells.
+
+        Args:
+            grid (Grid):
+                Grid from which to remove value.
+            coord (Coord):
+                Coordinate where value is removed.
+
+        Returns:
+            Grid:
+                Grid after removing value.
+    """
     new_cells: dict[Coord, Cell] = dict(grid.cells)
 
     new_cells[coord] = Cell(
@@ -341,9 +377,9 @@ def remove_value_from_grid(
     return Grid(
         cells=frozendict(new_cells),
         empty_coords=grid.empty_coords + (coord,),
-        filled_coords=remove_coord_from_empty_or_filled_coords(
+        filled_coords=remove_coord_from_coords(
             coord=coord,
-            empty_or_filled_coords=grid.filled_coords
+            coords=grid.filled_coords
         )
     )
 
@@ -353,6 +389,21 @@ def coord_to_str_to_str(
         row_join: str,
         col_join: str
 ) -> str:
+    """
+        Create sudoku string from coordinate-to-string function.
+
+        Args:
+            coord_to_str (Callable[[Coord], str]):
+                Function that maps coordinate to string.
+            row_join (str):
+                How rows are joined.
+            col_join (str):
+                How columns are joined.
+
+        Returns:
+            str:
+                Sudoku string.
+    """
     return row_join.join([col_join.join(
         [
             coord_to_str(
@@ -366,6 +417,21 @@ def grid_to_str(
         row_join: str,
         col_join: str
 ) -> str:
+    """
+        Create sudoku string from grid.
+
+        Args:
+            grid (Grid):
+                Grid to create sudoku string from.
+            row_join (str):
+                How rows are joined.
+            col_join (str):
+                How columns are joined.
+
+        Returns:
+            str:
+                Sudoku string.
+    """
     return coord_to_str_to_str(
         coord_to_str=lambda c: str(grid.cells[c].value),
         row_join=row_join,
@@ -376,13 +442,24 @@ def grid_to_str(
 def str_to_grid(
         grid_as_str: str
 ) -> Grid:
+    """
+        Create grid from sudoku string. All chars other than 123456789 are mapped to an empty cell.
+
+        Args:
+            grid_as_str (str):
+                Sudoku string.
+
+        Returns:
+            Grid:
+                Grid created from sudoku string.
+    """
     if len(grid_as_str) != 81:
         raise ValueError("size must be 81")
 
     grid: Grid = create_empty_grid()
 
     for entry_idx, char in enumerate(grid_as_str):
-        value = int(char) if char in "0123456789" else 0
+        value = int(char) if char in "123456789" else 0
 
         if value > 0:
             grid = set_value_in_grid(
@@ -395,4 +472,17 @@ def str_to_grid(
 
 
 def is_equal(grid1: Grid, grid2: Grid) -> bool:
+    """
+        Check if two grids are equal.
+
+        Args:
+            grid1 (Grid):
+                First grid to check equality.
+            grid2 (Grid):
+                Second grid to check equality.
+
+        Returns:
+            bool:
+                True if the grids are equal, False otherwise.
+    """
     return grid1.cells == grid2.cells
