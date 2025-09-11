@@ -1,24 +1,102 @@
-from typing import NamedTuple, Optional, Callable
+from typing import NamedTuple, Callable
+
 from frozendict import frozendict
-import random
 
 
 class Coord(NamedTuple):
+    """
+        Coordinate in a sudoku.
+
+        Attributes:
+            row_idx (int):
+                Row index from 0 (incl) to 8 (incl).
+            col_idx (int):
+                Column index from 0 (incl) to 8 (incl).
+    """
     row_idx: int
     col_idx: int
+    entry_idx: int
 
 
 class Cell(NamedTuple):
+    """
+        Cell in a sudoku.
+
+        Attributes:
+            value (int):
+                0 (cell is empty) or range from 1 (incl) to 9 (incl).
+            allowed_values (tuple[int, ...]):
+                Column, row and block constrain allowed values in a cell. Range from 1 (incl) to 9 (incl))
+    """
     value: int
     allowed_values: tuple[int, ...]
 
 
+# todo : unsortiert besser, lieber in guess strategy ordered sortieren + choicoe verwencen
 class Grid(NamedTuple):
+    """
+        Sudoku.
+
+        Attributes:
+            cells (frozendict[Coord, Cell]):
+                All cells.
+            empty_coords (dict[Coord, bool]):
+                Coordinates where cells are empty (value == 0), unsorted.
+            filled_coords (tuple[Coord, ...]):
+                Coordinates where cells are filled (value != 0), unsorted.
+    """
     cells: frozendict[Coord, Cell]
-    empty_coords: tuple[Coord, ...]  # todo in solution path
+    empty_coords: tuple[Coord, ...]
+    filled_coords: tuple[Coord, ...]
+
+
+def get_entry_idx(row_idx: int, col_idx: int) -> int:
+    """
+        Get entry index from row index and column index in row format.
+
+        Args:
+            row_idx (int):
+                Row index of coordinate to get entry index.
+            col_idx (int):
+                Column index of coordinate to get entry index.
+
+        Returns:
+            int:
+                Entry index from 0 (incl) to 80 (incl).
+    """
+    return row_idx * 9 + col_idx
+
+
+def get_coord(entry_idx: int) -> Coord:
+    """
+        Get coordinate from row format entry index.
+
+        Args:
+            entry_idx (int):
+                Entry index of coordinate.
+
+        Returns:
+            Coord:
+               Coordinate to entry index.
+    """
+
+    row_idx: int = entry_idx // 9
+
+    return Coord(
+        row_idx=row_idx,
+        col_idx=entry_idx - row_idx * 9,
+        entry_idx=entry_idx
+    )
 
 
 def create_all_coords() -> list[Coord]:
+    """
+        Creates all possible coordinates in a sudoku.
+
+        Returns:
+            list[Coord]:
+                All 81 coordinates in row format.
+    """
     coords: list[Coord] = []
 
     for entry_idx in range(0, 81):
@@ -27,7 +105,8 @@ def create_all_coords() -> list[Coord]:
 
         coords.append(Coord(
             row_idx=row_idx,
-            col_idx=col_idx
+            col_idx=col_idx,
+            entry_idx=entry_idx
         ))
 
     return coords
@@ -36,17 +115,32 @@ def create_all_coords() -> list[Coord]:
 all_coords_0_to_80: tuple[Coord, ...] = tuple(create_all_coords())
 
 
-def get_coords_in_block(block_idx: int) -> list[Coord]:
-    if not (0 <= block_idx <= 8):
-        raise ValueError(f"{block_idx} must be between 0 and 8")
+def get_coords_in_box(box_idx: int) -> list[Coord]:
+    """
+        Get all coordinates in box.
 
-    square_row_idx = block_idx // 3
-    square_col_idx = block_idx % 3
+        Args:
+            box_idx (int):
+                Index of box in row format.
+
+        Returns:
+            list[Coord]:
+                All coordinates in box.
+    """
+    if not (0 <= box_idx <= 8):
+        raise ValueError(f"{box_idx} must be between 0 and 8")
+
+    square_row_idx = box_idx // 3
+    square_col_idx = box_idx % 3
 
     return [
         Coord(
             row_idx=row_idx,
-            col_idx=col_idx
+            col_idx=col_idx,
+            entry_idx=get_entry_idx(
+                row_idx=row_idx,
+                col_idx=col_idx
+            )
         ) for row_idx in range(
             3 * square_row_idx,
             3 * square_row_idx + 3
@@ -57,12 +151,23 @@ def get_coords_in_block(block_idx: int) -> list[Coord]:
     ]
 
 
-def get_coords_in_block_of_coord(
+def get_coords_in_box_of_coord(
         coord: Coord
 ) -> list[Coord]:
+    """
+        Get all coordinates in box where coord is in.
+
+        Args:
+            coord (Coord):
+                Coordinate for which to get box coordinates.
+
+        Returns:
+            list[Coord]:
+                All coordinates in box where coord is in.
+    """
     for block_idx in range(0, 9):
-        coords_in_square: list[Coord] = get_coords_in_block(
-            block_idx=block_idx
+        coords_in_square: list[Coord] = get_coords_in_box(
+            box_idx=block_idx
         )
         if coord in coords_in_square:
             return coords_in_square
@@ -73,6 +178,13 @@ def get_coords_in_block_of_coord(
 
 
 def create_coord_to_all_coords_in_row_col_or_block() -> frozendict[Coord, set[Coord]]:
+    """
+        Get a map from all coordinates in grid to all coordinates that constrain
+        this coordinate (excluding the coordinate under consideration).
+
+        Returns:
+            frozendict[Coord, set[Coord]]: Coordinate to set of coordinates constraining it (excluding itself).
+    """
     coord_to_all_coords_in_row_col_or_block: dict[
         Coord, set[Coord]
     ] = {}
@@ -81,18 +193,26 @@ def create_coord_to_all_coords_in_row_col_or_block() -> frozendict[Coord, set[Co
         in_row: list[Coord] = [
             Coord(
                 row_idx=coord.row_idx,
-                col_idx=col_idx
+                col_idx=col_idx,
+                entry_idx=get_entry_idx(
+                    row_idx=coord.row_idx,
+                    col_idx=col_idx
+                )
             ) for col_idx in range(0, 9)
         ]
 
         in_col: list[Coord] = [
             Coord(
                 row_idx=row_idx,
-                col_idx=coord.col_idx
+                col_idx=coord.col_idx,
+                entry_idx=get_entry_idx(
+                    row_idx=row_idx,
+                    col_idx=coord.col_idx
+                )
             ) for row_idx in range(0, 9)
         ]
 
-        in_block: list[Coord] = get_coords_in_block_of_coord(
+        in_block: list[Coord] = get_coords_in_box_of_coord(
             coord=coord
         )
 
@@ -112,26 +232,30 @@ def create_coord_to_all_coords_in_row_col_or_block() -> frozendict[Coord, set[Co
 coord_to_all_coords_in_row_col_or_block = create_coord_to_all_coords_in_row_col_or_block()
 
 
-def copy_grid(
-        grid: Grid
-) -> Grid:
-    return Grid(
-        cells=frozendict({
-            coord_to_cell[0]: Cell(*coord_to_cell[1]) for coord_to_cell in grid.cells.items()
-        }),
-        empty_coords=grid.empty_coords
-    )
-
-
 def create_empty_grid() -> Grid:
+    """
+        Create an empty grid.
+
+        Returns:
+            Grid: Empty grid.
+    """
     return Grid(
         cells=frozendict({coord: Cell(
             value=0,
             allowed_values=tuple(range(1, 10))
         ) for coord in all_coords_0_to_80
         }),
-        empty_coords=all_coords_0_to_80
+        empty_coords=all_coords_0_to_80,
+        filled_coords=()
     )
+
+
+def remove_coord_from_empty_or_filled_coords(
+        coord: Coord,
+        empty_or_filled_coords: tuple[Coord, ...]
+) -> tuple[Coord, ...]:
+    coord_idx = empty_or_filled_coords.index(coord)
+    return empty_or_filled_coords[:coord_idx] + empty_or_filled_coords[coord_idx + 1:]
 
 
 def set_value_in_grid(
@@ -139,7 +263,13 @@ def set_value_in_grid(
         coord: Coord,
         value: int,
 ) -> Grid | None:
-    news_cells: dict[Coord, Cell] = dict(grid.cells.copy())
+    """
+        Create an empty grid.
+
+        Returns:
+            Grid: Empty grid.
+    """
+    news_cells: dict[Coord, Cell] = dict(grid.cells)
 
     news_cells[coord] = Cell(
         value=value,
@@ -167,7 +297,11 @@ def set_value_in_grid(
 
     return Grid(
         cells=frozendict(news_cells),
-        empty_coords=tuple([c for c in grid.empty_coords if c != coord])
+        empty_coords=remove_coord_from_empty_or_filled_coords(
+            coord=coord,
+            empty_or_filled_coords=grid.empty_coords
+        ),
+        filled_coords=grid.filled_coords + (coord,)
     )
 
 
@@ -175,7 +309,7 @@ def remove_value_from_grid(
         grid: Grid,
         coord: Coord
 ) -> Grid:
-    new_cells: dict[Coord, Cell] = dict(grid.cells.copy())
+    new_cells: dict[Coord, Cell] = dict(grid.cells)
 
     new_cells[coord] = Cell(
         value=0,
@@ -206,78 +340,12 @@ def remove_value_from_grid(
 
     return Grid(
         cells=frozendict(new_cells),
-        empty_coords=grid.empty_coords + (coord,)
-    )
-
-
-def remove_values_from_grid(
-        grid: Grid,
-        coords: list[Coord]
-) -> Grid:
-    new_cells: dict[Coord, Cell] = dict(grid.cells.copy())
-
-    for coord in coords:
-        new_cells[coord] = Cell(
-            value=0,
-            allowed_values=()
+        empty_coords=grid.empty_coords + (coord,),
+        filled_coords=remove_coord_from_empty_or_filled_coords(
+            coord=coord,
+            empty_or_filled_coords=grid.filled_coords
         )
-
-    all_affected_coords: set[Coord] = set()
-
-    for coord in coords:
-        affected_coords: set[Coord] = coord_to_all_coords_in_row_col_or_block[coord]
-
-        all_affected_coords |= affected_coords
-
-    all_affected_coords |= set(coords)
-
-    total_is_valid: bool = grid.is_valid
-    for affected_coord in all_affected_coords:
-        affected_cell: Cell = new_cells[affected_coord]
-
-        if affected_cell.value == 0:
-            already_used: set[int] = set(
-                [
-                    new_cells[constrain_coord].value for constrain_coord in
-                    coord_to_all_coords_in_row_col_or_block[affected_coord]
-                ]
-            )
-            new_allowed_values: tuple[int, ...] = tuple([v for v in range(
-                1, 10
-            ) if v not in already_used])
-
-            total_is_valid = total_is_valid and len(new_allowed_values) > 0
-
-            new_cells[affected_coord] = Cell(
-                value=new_cells[affected_coord].value,
-                allowed_values=new_allowed_values
-            )
-
-    return Grid(
-        cells=new_cells,
-        empty_coords=tuple([c for c in grid.empty_coords if c not in coords])
     )
-
-
-def get_random_empty_where_allowed_values_is_len_1(
-        grid: Grid
-) -> Optional[tuple[Coord, Cell]]:
-    new_cells: dict[Coord, Cell] = grid.cells.copy()
-
-    coord_to_cells: list[tuple[Coord, Cell]] = list(
-        new_cells.items()
-    )
-
-    random.shuffle(coord_to_cells)
-
-    for coord_to_cell in coord_to_cells:
-        if len(coord_to_cell[1].allowed_values) == 1 and coord_to_cell[1].value == 0:
-            return (
-                coord_to_cell[0],
-                coord_to_cell[1]
-            )
-
-    return None
 
 
 def coord_to_str_to_str(
@@ -287,7 +355,9 @@ def coord_to_str_to_str(
 ) -> str:
     return row_join.join([col_join.join(
         [
-            coord_to_str(Coord(row_idx=row_idx, col_idx=col_idx)) for col_idx in range(0, 9)
+            coord_to_str(
+                Coord(row_idx=row_idx, col_idx=col_idx, entry_idx=get_entry_idx(row_idx=row_idx, col_idx=col_idx))) for
+            col_idx in range(0, 9)
         ]) for row_idx in range(0, 9)])
 
 
@@ -311,22 +381,13 @@ def str_to_grid(
 
     grid: Grid = create_empty_grid()
 
-    for idx, char in enumerate(grid_as_str):
-        row_idx: int = idx // 9
-        col_idx: int = idx - row_idx * 9
-
-        value = int(char)
-
-        if value < 0 or value > 9:
-            raise ValueError(f"{value} must be between 0 (incl) and 9 (incl)")
+    for entry_idx, char in enumerate(grid_as_str):
+        value = int(char) if char in "0123456789" else 0
 
         if value > 0:
             grid = set_value_in_grid(
                 grid=grid,
-                coord=Coord(
-                    row_idx=row_idx,
-                    col_idx=col_idx
-                ),
+                coord=get_coord(entry_idx=entry_idx),
                 value=value
             )
 
