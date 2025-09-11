@@ -4,7 +4,7 @@ import random
 from enum import Enum
 from typing import NamedTuple, Optional, Callable
 
-from core.grid import Coord, Cell, create_empty_grid, set_value_in_grid, \
+from grid.grid import Coord, Cell, create_empty_grid, set_value_in_grid, \
     Grid
 
 

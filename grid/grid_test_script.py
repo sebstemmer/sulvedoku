@@ -1,4 +1,4 @@
-from core.grid import all_coords_0_to_80, coord_to_all_coords_in_row_col_or_block, get_coords_in_box, \
+from grid.grid import all_coords_0_to_80, coord_to_all_coords_in_row_col_or_block, get_coords_in_box, \
     get_coords_in_box_of_coord, set_value_in_grid, \
     create_empty_grid, Coord, Grid, get_entry_idx, remove_value_from_grid
 

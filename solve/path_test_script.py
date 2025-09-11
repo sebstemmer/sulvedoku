@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.grid import create_empty_grid, str_to_grid, remove_values_from_grid, Coord, Cell, Grid, grid_to_str
-from core.path import recursively_solve_trivial_solutions, create_start_node, create_filled, \
+from grid.grid import create_empty_grid, str_to_grid, remove_values_from_grid, Coord, Cell, Grid, grid_to_str
+from solve.path import recursively_solve_trivial_solutions, create_start_node, create_filled, \
     check_if_has_unique_solution, recursively_find_solution, SolutionPathNode, find_next_coord_and_value_for_ordered, \
     find_next_coord_and_value_for_random
 
