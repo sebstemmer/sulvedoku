@@ -3,11 +3,11 @@ from __future__ import annotations
 import random
 from typing import NamedTuple, Optional
 
-from core.grid import Coord, set_value_in_grid, Grid, \
+from grid.grid import Coord, set_value_in_grid, Grid, \
     remove_value_from_grid, all_coords_0_to_80
-from core.path import SolutionPathNode, recursively_solve_trivial_solutions, create_node, \
-    find_next_coord_and_value_for_smallest_allowed, solve_grid, GoBackFailed, create_filled, \
-    find_next_coord_and_value_for_random
+from solve.path import SolutionPathNode, recursively_solve_trivial_solutions, \
+    smallest_allowed_guess_strategy, solve_grid, GoBackFailed, create_filled, \
+    random_guess_strategy
 
 
 class At(NamedTuple):
@@ -45,8 +45,7 @@ def check_if_has_unique_solution(
     if len(grid.empty_coords) == 0:
         return True
 
-    node = create_node(
-        max_go_back_depth=None,
+    node = SolutionPathNode(
         grid=grid,
         at=None
     )
@@ -56,11 +55,12 @@ def check_if_has_unique_solution(
     if after_trivial is None:
         raise ValueError("grid is not valid")
 
-    next_coord_and_value: tuple[Coord, int] | None = find_next_coord_and_value_for_smallest_allowed(
-        grid=after_trivial.grid)
-
-    if next_coord_and_value is None:
+    if len(after_trivial.grid.empty_coords) == 0:
         return True
+
+    next_coord_and_value: tuple[Coord, int] = smallest_allowed_guess_strategy(
+        grid=after_trivial.grid
+    )
 
     next_coord: Coord = next_coord_and_value[0]
 
@@ -85,7 +85,7 @@ def check_if_has_unique_solution(
                 _ = solve_grid(
                     grid=potential_other_solution_grid,
                     max_go_back_depth=None,
-                    guess_strategy=find_next_coord_and_value_for_smallest_allowed
+                    guess_strategy=smallest_allowed_guess_strategy
                 )
                 return False
             except GoBackFailed:
@@ -224,7 +224,7 @@ def create_grid(
 ) -> RemovePathNode:
     filled_grid: Grid = create_filled(
         max_go_back_depth=-1,
-        guess_strategy=find_next_coord_and_value_for_random
+        guess_strategy=random_guess_strategy
     ).grid
 
     try:

@@ -1,6 +1,6 @@
-from core.path import create_filled, find_next_coord_and_value_for_random
-from core.grid import grid_to_str, Grid, all_coords_0_to_80
-from create.create_core import recursively_remove_values, RemovePathNode, create_start_node, create_grid
+from solve.path import create_filled, random_guess_strategy
+from grid.grid import grid_to_str, all_coords_0_to_80
+from create.create_core import recursively_remove_values, RemovePathNode
 import sys
 
 sys.setrecursionlimit(int(1e9))
@@ -17,7 +17,7 @@ def get_path(node: RemovePathNode, depth: int) -> list[RemovePathNode]:
     else:
         return []
 
-filled = create_filled(max_go_back_depth=-1, guess_strategy=find_next_coord_and_value_for_random)
+filled = create_filled(max_go_back_depth=-1, guess_strategy=random_guess_strategy)
 
 twenty_five = recursively_remove_values(
     node=RemovePathNode(
