@@ -12,6 +12,8 @@ class Coord(NamedTuple):
                 Row index from 0 (incl) to 8 (incl).
             col_idx (int):
                 Column index from 0 (incl) to 8 (incl).
+            entry_idx (int):
+                Entry index in row format from 0 (incl) to 80 (incl).
     """
     row_idx: int
     col_idx: int
