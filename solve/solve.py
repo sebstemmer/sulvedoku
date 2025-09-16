@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import NamedTuple, Optional, Callable
 
-from grid.grid import Coord, Cell, create_empty_grid, set_value_in_grid, \
+from grid.grid import Coord, create_empty_grid, set_value_in_grid, \
     Grid
 
 
@@ -162,7 +162,7 @@ def try_other_value(
             guess_strategy (Callable[[Grid], tuple[Coord, int]]):
                 Strategy used to determine which coordinate and value should be handled next.
             max_go_back_depth (int):
-                Maximum depth of backtracking.
+                Maximum depth of backtracking. None means no limit.
 
         Returns:
             SolutionPathNode:
@@ -235,7 +235,7 @@ def go_back_to_previous_node_and_try_other_value(
             go_back_depth (int):
                 Current depth of backtracking.
             max_go_back_depth (int):
-                Maximum depth of backtracking.
+                Maximum depth of backtracking. None means no limit.
 
         Returns:
             SolutionPathNode:
@@ -345,24 +345,29 @@ def smallest_allowed_guess_strategy(
 
 def recursively_find_solution(
         node: SolutionPathNode,
-        guess_strategy: Callable[
-            [Grid], tuple[Coord, int]
-        ],
-        max_go_back_depth: Optional[int]
+        guess_strategy: Callable[[Grid], tuple[Coord, int]] = smallest_allowed_guess_strategy,
+        max_go_back_depth: Optional[int] = None
 ) -> SolutionPathNode:
     """
-    Recursive function to solve a (not necessary valid) grid.
+    Solve a Sudoku. This function is recursive.
 
     Args:
-        node (SolutionPathNode): Node that contains the grid and the other parameters to solve.
-        guess_strategy (Callable[Grid, Optional[tuple[Coord, int]]]): Method for finding next coord and value to handle.
+        node (SolutionPathNode):
+            Node that contains grid to be solved.
+        guess_strategy (Callable[[Grid], tuple[Coord, int]])
+            Strategy used to determine which coordinate and value should be handled next.
+        max_go_back_depth (Optional[int]):
+            Maximum depth of backtracking. None means no limit.
 
     Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
+        SolutionPathNode:
+            Last node of solution path containing the solution grid.
 
     Raises:
-        MaxGoBackDepthReached: If maximum backtracking depth is reached
-        GoBackFailed: If no solution can be found.
+        MaxGoBackDepthReached:
+            If maximum backtracking depth is reached
+        GoBackFailed:
+            If no solution can be found.
     """
 
     handled_trivial_solutions: SolutionPathNode | None = recursively_solve_trivial_solutions(
@@ -419,73 +424,19 @@ def recursively_find_solution(
     )
 
 
-def solve_grid(
-        grid: Grid,
-        guess_strategy: Callable[
-            [Grid], tuple[Coord, int]
-        ],
-        max_go_back_depth: Optional[int]
-) -> SolutionPathNode:
-    """
-    Solve a (not necessary valid) grid.
-
-    Args:
-        grid (Grid): Grid to solve.
-        max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], tuple[Coord, int] | None]): Method for finding next coord and value to handle.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
-
-    Raises:
-        MaxGoBackDepthReached: If maximum backtracking depth is reached
-        GoBackFailed: If no solution can be found.
-    """
-    start: SolutionPathNode = SolutionPathNode(
-        grid=grid,
-        at=None
-    )
-
-    return recursively_find_solution(
-        node=start,
-        guess_strategy=guess_strategy,
-        max_go_back_depth=max_go_back_depth
-    )
-
-
-# todo: useless
-def solve_valid_grid(
-        grid: Grid,
-        guess_strategy: Callable[[Grid], tuple[Coord, int]]
-) -> SolutionPathNode:
-    """
-    Solve a VALID grid.
-
-    Args:
-        grid (dict[Coord, Cell]): Grid to solve.
-        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], Optional[tuple[Coord, int]]]): Method for finding next coordinate and value to handle.
-
-    Returns:
-        SolutionPathNode: Last node of solution path containing the solution grid.
-    """
-    return solve_grid(
-        grid=grid,
-        guess_strategy=guess_strategy,
-        max_go_back_depth=None,
-    )
-
-
-def solve_valid_grid_until_no_trivial_solutions(
+def solve_grid_until_no_trivial_solutions(
         grid: Grid
 ) -> SolutionPathNode:
     """
-    Solve a VALID grid until there are no trivial solutions left.
+    Solve a grid until there are no trivial solutions left.
 
     Args:
-        grid (dict[Coord, Cell]): Grid to solve.
+        grid (Grid):
+            Grid to solve.
 
     Returns:
-        SolutionPathNode: Node when all trivial solutions are found.
+        SolutionPathNode:
+            Node when all trivial solutions are found.
     """
 
     node: SolutionPathNode = SolutionPathNode(
@@ -503,51 +454,77 @@ def solve_valid_grid_until_no_trivial_solutions(
     return solved_trivial_solutions
 
 
-def create_filled(
-        max_go_back_depth: Optional[int],
-        guess_strategy: Callable[[Grid], tuple[Coord, int]]
-) -> SolutionPathNode:
+def solve_grid(
+        grid: Grid,
+        guess_strategy: Callable[
+            [Grid], tuple[Coord, int]
+        ] = smallest_allowed_guess_strategy,
+        max_go_back_depth: Optional[int] = None
+) -> Grid:
     """
-    Create a filled grid.
+    Solve a Sudoku grid.
 
     Args:
-        max_go_back_depth (Optional[int]): Maximum depth of going back when backtracking (None means no maximum depth).
-        guess_strategy (Callable[[Grid, list[tuple[Coord, int]]], Optional[tuple[Coord, int]]]): Method for finding next coord and value to handle.
+        grid (Grid):
+            Grid to be solved.
+        guess_strategy (Callable[[Grid], tuple[Coord, int]])
+            Strategy used to determine which coordinate and value should be handled next.
+        max_go_back_depth (Optional[int]):
+            Maximum depth of backtracking. None means no limit.
 
     Returns:
-        SolutionPathNode: Last node of solution path containing the filled grid.
+        Grid:
+            Solution grid.
+
+    Raises:
+        MaxGoBackDepthReached:
+            If maximum backtracking depth is reached
+        GoBackFailed:
+            If no solution can be found.
+    """
+    start: SolutionPathNode = SolutionPathNode(
+        grid=grid,
+        at=None
+    )
+
+    return recursively_find_solution(
+        node=start,
+        guess_strategy=guess_strategy,
+        max_go_back_depth=max_go_back_depth
+    ).grid
+
+
+def create_filled(
+        max_go_back_depth: Optional[int] = 0,
+        guess_strategy: Callable[[Grid], tuple[Coord, int]] = random_guess_strategy
+) -> Grid:
+    """
+    Create a completely filled Sudoku grid.
+
+    Args:
+        max_go_back_depth (Optional[int]):
+            Maximum depth of backtracking. None is no limit.
+        guess_strategy (Callable[[Grid], tuple[Coord, int]]):
+            Method for finding next coord and value to handle. Default is random because this results in maximum
+            randomness in result grid.
+
+    Returns:
+        SolutionPathNode:
+            Last node of solution path containing the filled grid.
     """
     empty_grid: Grid = create_empty_grid()
 
+    final: Grid
     try:
-        final: SolutionPathNode = solve_grid(
+        final = solve_grid(
             grid=empty_grid,
             max_go_back_depth=max_go_back_depth,
             guess_strategy=guess_strategy
         )
     except (GoBackFailed, MaxGoBackDepthReached):
-        final: SolutionPathNode = create_filled(
-            guess_strategy=guess_strategy,
+        final = create_filled(
             max_go_back_depth=max_go_back_depth,
+            guess_strategy=guess_strategy
         )
 
     return final
-
-
-def create_random_filled() -> Grid:
-    return create_filled(
-        max_go_back_depth=None,
-        guess_strategy=random_guess_strategy
-    ).grid
-
-
-def get_path(node: SolutionPathNode, depth: int) -> list[SolutionPathNode]:
-    init_path: list[SolutionPathNode] = [node] if depth == 0 else []
-
-    if node.at is not None:
-        return get_path(
-            node=node.at.previous_node,
-            depth=depth + 1
-        ) + [node.at.previous_node] + init_path
-    else:
-        return []

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from grid.grid import create_empty_grid, str_to_grid, Coord, Grid, get_entry_idx, set_value_in_grid, \
-    all_coords_0_to_80
-from solve.solve import recursively_solve_trivial_solutions, create_filled, recursively_find_solution, SolutionPathNode, \
-    ordered_guess_strategy, random_guess_strategy, smallest_allowed_guess_strategy
+    all_coords_0_to_80, is_equal
+from solve.solve import recursively_solve_trivial_solutions, create_filled, SolutionPathNode, \
+    ordered_guess_strategy, random_guess_strategy, smallest_allowed_guess_strategy, solve_grid
 
 
 def find_trivial_solutions_test() -> None:
@@ -68,39 +68,51 @@ def find_trivial_solutions_test() -> None:
     assert handled_trivial_solutions.at.previous_node.at.is_trivial
 
 
-def recursively_find_solution_test() -> None:
-    non_unique_grid_str: str = "600000237070080400203000019320600004004000500000041700000506940007008605500000071"
+def solve_grid_test() -> None:
+    grid_str: str = "068700900004000071031809050305080100046005007007304092602001005003020600059030028"
+    solution_str: str = "568712943924653871731849256395287164246195387817364592682971435473528619159436728"
 
     grid = str_to_grid(
-        grid_as_str=non_unique_grid_str
+        grid_as_str=grid_str
     )
 
-    node = SolutionPathNode(
+    solution_random: Grid = solve_grid(
         grid=grid,
-        at=None
-    )
-
-    _: SolutionPathNode = recursively_find_solution(
-        node=node,
         guess_strategy=random_guess_strategy,
         max_go_back_depth=None
     )
 
-    pass
+    assert is_equal(grid1=solution_random, grid2=str_to_grid(grid_as_str=solution_str))
+
+    solution_ordered: Grid = solve_grid(
+        grid=grid,
+        guess_strategy=ordered_guess_strategy,
+        max_go_back_depth=None
+    )
+
+    assert is_equal(grid1=solution_ordered, grid2=str_to_grid(grid_as_str=solution_str))
+
+    solution_smallest_allowed: Grid = solve_grid(
+        grid=grid,
+        guess_strategy=smallest_allowed_guess_strategy,
+        max_go_back_depth=None
+    )
+
+    assert is_equal(grid1=solution_smallest_allowed, grid2=str_to_grid(grid_as_str=solution_str))
 
 
 def create_filled_test() -> None:
-    filled_by_random: SolutionPathNode = create_filled(
+    filled_by_random: Grid = create_filled(
         max_go_back_depth=2,
         guess_strategy=random_guess_strategy
     )
 
-    filled_by_ordered: SolutionPathNode = create_filled(
+    filled_by_ordered: Grid = create_filled(
         max_go_back_depth=2,
         guess_strategy=ordered_guess_strategy
     )
 
-    filled_by_smallest_allowed: SolutionPathNode = create_filled(
+    filled_by_smallest_allowed: Grid = create_filled(
         max_go_back_depth=2,
         guess_strategy=smallest_allowed_guess_strategy
     )
@@ -113,27 +125,27 @@ def create_filled_test() -> None:
         filled_by_ordered_grid = set_value_in_grid(
             grid=filled_by_ordered_grid,
             coord=coord,
-            value=filled_by_ordered.grid.cells[coord].value
+            value=filled_by_ordered.cells[coord].value
         )
         assert filled_by_ordered_grid is not None
 
         filled_by_random_grid = set_value_in_grid(
             grid=filled_by_random_grid,
             coord=coord,
-            value=filled_by_random.grid.cells[coord].value
+            value=filled_by_random.cells[coord].value
         )
         assert filled_by_random_grid is not None
 
         filled_by_smallest_allowed_grid = set_value_in_grid(
             grid=filled_by_smallest_allowed_grid,
             coord=coord,
-            value=filled_by_smallest_allowed.grid.cells[coord].value
+            value=filled_by_smallest_allowed.cells[coord].value
         )
         assert filled_by_smallest_allowed_grid is not None
 
 
 find_trivial_solutions_test()
-recursively_find_solution_test()
+solve_grid_test()
 create_filled_test()
 
 print("all tests passed")
