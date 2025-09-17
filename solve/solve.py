@@ -29,7 +29,7 @@ class At(NamedTuple):
 
 class SolutionPathNode(NamedTuple):
     """
-        Finding a solution of a Sudoku is modeled as a linked list. This list is called solution path.
+        Finding a solution of a Sudoku is modeled as a linked list (state graph). This list is called solution path.
         When a value is tried a new grid and hence a new node on the solution path is created.
 
         Attributes:
