@@ -3,45 +3,70 @@ from __future__ import annotations
 import random
 from typing import NamedTuple, Optional
 
-from grid.grid import Coord, set_value_in_grid, Grid, \
-    remove_value_from_grid, all_coords_0_to_80
-from solve.path import SolutionPathNode, recursively_solve_trivial_solutions, \
-    smallest_allowed_guess_strategy, solve_grid, GoBackFailed, create_filled, \
-    random_guess_strategy
+from grid.grid import Coord, set_value_in_grid, Grid, remove_value_from_grid
+from solve.solve import SolutionPathNode, recursively_solve_trivial_solutions, smallest_allowed_guess_strategy, \
+    solve_grid, GoBackFailed, create_filled, random_guess_strategy
 
 
 class At(NamedTuple):
+    """
+        Describes which node of the Sudoku remove path is handled.
+
+        Attributes:
+            coord (Coord):
+                Coordinate of grid at which a value was removed.
+            tries (frozenset[int]):
+                Already tried these coordinates for removal on other attempts.
+            previous_node (SolutionPathNode):
+                Previous node of remove path.
+    """
     coord: Coord
     tries: set[Coord]
     previous_node: RemovePathNode
 
 
 class RemovePathNode(NamedTuple):
+    """
+        Creating a Sudoku is modeled as a linked list (state graph). This list is called remove path.
+        When a coordinate is tried a new grid and hence a new node on the remove path is created.
+
+        Attributes:
+            grid (Grid):
+                To each node on the remove path belongs a grid.
+            at (Optional[At]):
+                None at the start, afterwards describes the last removed coordinate.
+
+    """
     grid: Grid
-    filled_coords: tuple[Coord, ...]
     at: Optional[At]
     selection_depth: int
 
 
 class MaxSelectionDepthReached(Exception):
+    """
+        Every time a coordinate value is removed the selection depths increases by one. Raised when the maximum
+        selection depth is reached.
+    """
     pass
-
-
-def create_start_node(
-        filled_grid: Grid,
-) -> RemovePathNode:
-    return RemovePathNode(
-        grid=filled_grid,
-        filled_coords=all_coords_0_to_80,
-        at=None,
-        selection_depth=0
-    )
 
 
 def check_if_has_unique_solution(
         grid: Grid,
         solution_grid: Grid
 ) -> bool:
+    """
+        Test if the provided Sudoku grid has a unique solution.
+
+        Args:
+            grid (Grid):
+                Grid under test.
+            solution_grid (Grid):
+                One known valid solution.
+
+        Returns:
+            bool:
+                True if the grid has a unique solution, False otherwise.
+    """
     if len(grid.empty_coords) == 0:
         return True
 
@@ -109,7 +134,27 @@ def go_back_to_previous_node_and_try_other_coord(
         solution_grid: Grid,
         num_filled_target: int,
         max_selection_depth: int
-):
+) -> RemovePathNode:
+    """
+        Go back to previous node and try another coordinate, because removing the tried coordinate has lead to a
+        non-unique solution.
+
+        Args:
+            selection_depth (int):
+                Current selection depth.
+            node (RemovePathNode):
+                Node to go back from.
+            solution_grid (Grid):
+                One known valid solution.
+            num_filled_target (int):
+                Number of filled cells in the target Sudoku grid that is created.
+            max_selection_depth (int):
+                The maximum selection depth, if reached the Sudoku creating is restarted.
+
+        Returns:
+            RemovePathNode:
+                Node with final created Sudoku grid.
+    """
     at: At | None = node.at
 
     if node.at is None:
@@ -118,7 +163,6 @@ def go_back_to_previous_node_and_try_other_coord(
     return try_other_coord(
         grid=at.previous_node.grid,
         already_tried=at.tries,
-        filled_coords=node.at.previous_node.filled_coords,
         selection_depth=selection_depth,
         node=node.at.previous_node,
         solution_grid=solution_grid,
@@ -130,14 +174,36 @@ def go_back_to_previous_node_and_try_other_coord(
 def try_other_coord(
         grid: Grid,
         already_tried: set[Coord],
-        filled_coords: tuple[Coord, ...],
         selection_depth: int,
         node: RemovePathNode,
         solution_grid: Grid,
         num_filled_target: int,
         max_selection_depth: int
 ) -> RemovePathNode:
-    pool: list[Coord] = [c for c in filled_coords if c not in already_tried]
+    """
+        Try another coordinate.
+
+        Args:
+            grid (Grid):
+                Current grid.
+            already_tried (set[Coord]):
+                Already tried these coordinates in previous attempts.
+            selection_depth (int):
+                Current selection depth.
+            node (RemovePathNode):
+                Current node.
+            solution_grid (Grid):
+                One known valid solution.
+            num_filled_target (int):
+                Number of filled cells in the target Sudoku grid that is created.
+            max_selection_depth (int):
+                The maximum selection depth, if reached the Sudoku creating is restarted.
+
+        Returns:
+            RemovePathNode:
+                Node with final created Sudoku grid.
+    """
+    pool: list[Coord] = [c for c in grid.filled_coords if c not in already_tried]
 
     if len(pool) == 0:
         return go_back_to_previous_node_and_try_other_coord(
@@ -170,7 +236,6 @@ def try_other_coord(
     if has_unique_solution:
         new_node = RemovePathNode(
             grid=new_grid,
-            filled_coords=tuple([c for c in node.filled_coords if c != coord]),
             at=At(
                 coord=coord,
                 tries=new_tries,
@@ -188,7 +253,6 @@ def try_other_coord(
         return try_other_coord(
             grid=grid,
             already_tried=new_tries,
-            filled_coords=filled_coords,
             selection_depth=new_selection_depth,
             node=node,
             solution_grid=solution_grid,
@@ -203,13 +267,29 @@ def recursively_remove_values(
         num_filled_target: int,
         max_selection_depth: int
 ) -> RemovePathNode:
-    if len(node.filled_coords) <= num_filled_target:
+    """
+        Recursive function that removes values from a Sudoku to create a Sudoku with a specific number of filled cells.
+
+        Args:
+            node (RemovePathNode):
+                Current node.
+            solution_grid (Grid):
+                One known valid solution.
+            num_filled_target (int):
+                Number of filled cells in the target Sudoku grid that is created.
+            max_selection_depth (int):
+                The maximum selection depth, if reached the Sudoku creating is restarted.
+
+        Returns:
+            RemovePathNode:
+                Node with final created Sudoku grid.
+    """
+    if len(node.grid.filled_coords) <= num_filled_target:
         return node
 
     return try_other_coord(
         grid=node.grid,
         already_tried=set(),
-        filled_coords=node.filled_coords,
         selection_depth=node.selection_depth,
         node=node,
         solution_grid=solution_grid,
@@ -220,22 +300,41 @@ def recursively_remove_values(
 
 def create_grid(
         num_filled_target: int,
-        max_selection_depth: int,
+        max_selection_depth: int = 100,
 ) -> RemovePathNode:
+    """
+        Create a Sudoku with a specific number of filled cells.
+
+        Args:
+            num_filled_target (int):
+                Number of filled cells in the target Sudoku grid that is created.
+            max_selection_depth (int):
+                The maximum selection depth, if reached the Sudoku creating is restarted.
+
+        Returns:
+            RemovePathNode:
+                Node with final created Sudoku grid.
+    """
+    if 81 - num_filled_target > max_selection_depth:
+        raise ValueError("max_selection_depth is too small")
+
     filled_grid: Grid = create_filled(
         max_go_back_depth=-1,
         guess_strategy=random_guess_strategy
-    ).grid
+    )
 
     try:
         return recursively_remove_values(
-            node=create_start_node(filled_grid),
+            node=RemovePathNode(
+                grid=filled_grid,
+                at=None,
+                selection_depth=0
+            ),
             solution_grid=filled_grid,
             num_filled_target=num_filled_target,
             max_selection_depth=max_selection_depth
         )
     except MaxSelectionDepthReached:
-        print("restart")
         return create_grid(
             num_filled_target=num_filled_target,
             max_selection_depth=max_selection_depth,

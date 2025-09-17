@@ -1,49 +1,24 @@
 import sys
 
-from create.create_core import check_if_has_unique_solution, create_filled, create_random_filled
-from grid.grid import create_empty_grid, str_to_grid, Coord, Grid, get_entry_idx, remove_value_from_grid, \
-    all_coords_0_to_80, set_value_in_grid
-from solve.path import SolutionPathNode, ordered_guess_strategy, random_guess_strategy
+from create.create import check_if_has_unique_solution, create_filled, create_grid
+from grid.grid import str_to_grid, Coord, Grid, get_entry_idx, remove_value_from_grid
+from solve.solve import ordered_guess_strategy, solve_grid
 
 sys.setrecursionlimit(int(1e4))
 
 
-def create_random_filled_test() -> None:
-    filled_by_random: SolutionPathNode = create_random_filled(
-        max_go_back_depth=-1,
-        guess_strategy=random_guess_strategy
-    )
-
-    filled_by_ordered_grid: Grid = create_empty_grid()
-    filled_by_random_grid: Grid = create_empty_grid()
-    for coord in all_coords_0_to_80:
-        filled_by_ordered_grid = set_value_in_grid(
-            grid=filled_by_ordered_grid,
-            coord=coord,
-            value=filled_by_ordered.grid.cells[coord].value
-        )
-        assert filled_by_ordered_grid is not None
-
-        filled_by_random_grid = set_value_in_grid(
-            grid=filled_by_random_grid,
-            coord=coord,
-            value=filled_by_random.grid.cells[coord].value
-        )
-        assert filled_by_random_grid is not None
-
-
 def check_if_has_unique_solution_test() -> None:
-    filled: SolutionPathNode = create_filled(
+    filled: Grid = create_filled(
         max_go_back_depth=-1,
         guess_strategy=ordered_guess_strategy
     )
 
     assert check_if_has_unique_solution(
-        grid=filled.grid,
-        solution_grid=filled.grid
+        grid=filled,
+        solution_grid=filled
     )
 
-    grid = filled.grid
+    grid = filled
     for col_idx in range(0, 9):
         coord = Coord(
             row_idx=0,
@@ -61,7 +36,7 @@ def check_if_has_unique_solution_test() -> None:
 
     assert check_if_has_unique_solution(
         grid=grid,
-        solution_grid=filled.grid
+        solution_grid=filled
     )
 
     for col_idx in range(0, 9):
@@ -81,7 +56,7 @@ def check_if_has_unique_solution_test() -> None:
 
     assert not check_if_has_unique_solution(
         grid=grid,
-        solution_grid=filled.grid
+        solution_grid=filled
     )
 
     non_unique_grid_str: str = "600000237070080400203000019320600004004000500000041700000506940007008605500000071"
@@ -112,8 +87,23 @@ def check_if_has_unique_solution_test() -> None:
         solution_grid=another_non_unique_solution_grid
     )
 
+def create_grid_test() -> None:
+    grid: Grid = create_grid(
+        num_filled_target=25,
+        max_selection_depth=100
+    ).grid
 
-create_filled_test()
+    solution_grid: Grid = solve_grid(
+        grid=grid
+    )
+
+    assert check_if_has_unique_solution(
+        grid=grid,
+        solution_grid=solution_grid
+    )
+
+
+create_grid_test()
 check_if_has_unique_solution_test()
 
 print("all tests passed")
