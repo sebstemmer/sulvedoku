@@ -1,9 +1,8 @@
-from grid.grid import grid_to_str, Coord, get_entry_idx
 from create.create import create_grid
+from grid.grid import Coord, get_entry_idx
 
 result = create_grid(
-    num_filled_target=23,
-    max_remove_depth=100
+    num_filled_target=23
 )
 
 total = ""
@@ -25,7 +24,7 @@ for row in range(0, 9):
 
     if row == 2 or row == 5:
         total += str("\n\n------------------------------------------------\n\n")
-    elif row <8:
+    elif row < 8:
         total += str("\n\n")
     else:
         pass

@@ -1,10 +1,7 @@
 from solve.solve import create_filled, random_guess_strategy
 import time
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
-
-sys.setrecursionlimit(int(1e9))
 
 num_executions: int = 500
 

@@ -6,11 +6,9 @@ import numpy as np
 
 from create.create import create_grid
 
-sys.setrecursionlimit(int(1e9))
-
 num_executions: int = 100
 
-num_filled_target = 23
+num_filled_target: int = 23
 
 max_depths = list(range(75, 250, 5)) + list(range(250, 2000, 100))
 #max_depths = range(100, 500, 20)

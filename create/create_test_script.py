@@ -4,12 +4,9 @@ from create.create import check_if_has_unique_solution, create_filled, create_gr
 from grid.grid import str_to_grid, Coord, Grid, get_entry_idx, remove_value_from_grid
 from solve.solve import ordered_guess_strategy, solve_grid
 
-sys.setrecursionlimit(int(1e4))
-
 
 def check_if_has_unique_solution_test() -> None:
     filled: Grid = create_filled(
-        max_go_back_depth=-1,
         guess_strategy=ordered_guess_strategy
     )
 
@@ -87,10 +84,10 @@ def check_if_has_unique_solution_test() -> None:
         solution_grid=another_non_unique_solution_grid
     )
 
+
 def create_grid_test() -> None:
     grid: Grid = create_grid(
-        num_filled_target=25,
-        max_selection_depth=100
+        num_filled_target=25
     ).grid
 
     solution_grid: Grid = solve_grid(

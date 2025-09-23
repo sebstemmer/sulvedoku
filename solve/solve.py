@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import sys
 from typing import NamedTuple, Optional, Callable
 
 from grid.grid import Coord, create_empty_grid, set_value_in_grid, \
@@ -574,7 +575,7 @@ def solve_grid(
 
 
 def create_filled(
-        max_depth: Optional[int] = 0,
+        max_depth: Optional[int] = 100,
         guess_strategy: Callable[[Grid], tuple[Coord, int]] = random_guess_strategy
 ) -> Grid:
     """
@@ -592,6 +593,8 @@ def create_filled(
             Last node of solution path containing the filled grid.
     """
     empty_grid: Grid = create_empty_grid()
+
+    sys.setrecursionlimit(int(1e7))
 
     final: Grid
     try:
