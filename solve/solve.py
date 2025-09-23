@@ -45,7 +45,7 @@ class SolutionPathNode(NamedTuple):
 
 class MaxDepthReached(Exception):
     """
-        Raised when the maximum go back depth in backtracking is reached.
+        Raised when the maximum depth in backtracking is reached.
     """
     pass
 
@@ -148,7 +148,7 @@ def solve_trivial_solutions(
 def recursively_solve_trivial_solutions(
         node: SolutionPathNode,
         depth: int,
-        max_depth: Optional[int],
+        max_depth: Optional[int] = None,
 ) -> tuple[SolutionPathNode | None, int]:
     """
         Find trivial solutions of a sudoku, creates and links the corresponding nodes on the path. Works recursively
