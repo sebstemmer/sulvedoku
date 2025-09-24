@@ -302,7 +302,7 @@ def recursively_remove_values(
 def create_grid(
         num_filled_target: int,
         max_remove_depth: int = 100,
-) -> RemovePathNode:
+) -> Grid:
     """
         Create a Sudoku with a specific number of filled cells.
 
@@ -313,8 +313,8 @@ def create_grid(
                 The maximum remove depth, if reached the Sudoku creating is restarted.
 
         Returns:
-            RemovePathNode:
-                Node with final created Sudoku grid.
+            Grid:
+                Created Sudoku grid.
     """
     if 81 - num_filled_target > max_remove_depth:
         raise ValueError("max_depth is too small")
@@ -336,7 +336,7 @@ def create_grid(
             solution_grid=filled_grid,
             num_filled_target=num_filled_target,
             max_remove_depth=max_remove_depth
-        )
+        ).grid
     except MaxRemoveDepthReached:
         return create_grid(
             num_filled_target=num_filled_target,

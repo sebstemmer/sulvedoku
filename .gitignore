@@ -1,7 +1,11 @@
 **/.DS_Store
 
-**/data/
+#**/data/
 .idea
-data
+
+data/*
+!data/put_data_here.md
+
 __pycache__
 venv
+sulvedoku.iml

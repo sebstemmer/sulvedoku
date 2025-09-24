@@ -1,14 +1,18 @@
 from create.create import create_grid
 from grid.grid import Coord, get_entry_idx
 
+num_filled_target: int = 23
+
+
 result = create_grid(
-    num_filled_target=23
+    num_filled_target=num_filled_target,
+    max_remove_depth=100
 )
 
 total = ""
 for row in range(0, 9):
     for col in range(0, 9):
-        value = result.grid.cells[Coord(row, col, get_entry_idx(row, col))].value
+        value = result.cells[Coord(row, col, get_entry_idx(row, col))].value
 
         if value == 0:
             value_str = "_"
