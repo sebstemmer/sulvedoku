@@ -301,7 +301,7 @@ def recursively_remove_values(
 
 def create_grid(
         num_filled_target: int,
-        max_remove_depth: int = 100,
+        max_remove_depth: int = 130,
 ) -> Grid:
     """
         Create a Sudoku with a specific number of filled cells.

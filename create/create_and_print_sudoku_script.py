@@ -6,7 +6,7 @@ num_filled_target: int = 23
 
 result = create_grid(
     num_filled_target=num_filled_target,
-    max_remove_depth=100
+    max_remove_depth=130
 )
 
 total = ""
