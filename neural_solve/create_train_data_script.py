@@ -5,7 +5,7 @@ from common.track_progress import track
 from solve.solve import solve_grid_until_no_trivial_solutions
 
 raw_data_path = "./data/3m-sudokus.csv"
-train_data_path = "./data/train_data_test.csv"
+train_data_path = "./data/train_data.csv"
 
 def get_train_data_row(
         quiz_str: str,
