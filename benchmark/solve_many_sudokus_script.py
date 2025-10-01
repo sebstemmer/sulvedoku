@@ -3,7 +3,7 @@ from typing import Callable
 import numpy as np
 
 from grid.grid import Grid, is_equal, str_to_grid
-from neural_solver.model import SudokuNet
+from neural_solve.model import SudokuNet
 from solve.solve import solve_grid, random_guess_strategy, ordered_guess_strategy, smallest_allowed_guess_strategy
 
 import torch

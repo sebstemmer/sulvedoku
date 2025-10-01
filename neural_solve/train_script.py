@@ -6,33 +6,10 @@ from neural_solve.model import SudokuNet
 from neural_solve.dataset import SudokuDataset
 from common.log_info import log_info
 from neural_solve.solve import get_most_certain_coord_and_index_value
-
-train_data_path: str = "./data/neural-solver-train-data.csv"
-
-device = torch.device("mps")
-
-batch_size: int = 1024
-
-learning_rate: float = 1e-4
-weight_decay: float = 1e-3
-
-load_from_epoch: int | None = None
-epoch_key: str = "epoch"
-model_state_key: str = "model_state"
-optimizer_state_key: str = "optimizer_state"
-train_loss_key: str = "train_loss"
-valid_loss_key: str = "valid_loss"
-valid_success_rate_key: str = "valid_success_rate"
-
-feature_maps: int = 456
-row_col_box_out_features: int = 27
-dense_out_features: int = 729
-
-num_epochs: int = 100
-
-def get_model_weight_path(epoch: int) -> str:
-    return f"./data/sudoku_net_training_checkpoints/{epoch}.pth"
-
+from neural_solve.train_params import dense_out_features
+from train_params import train_data_path, device, batch_size, learning_rate, weight_decay, load_from_epoch, epoch_key, \
+    model_state_key, optimizer_state_key, train_loss_key, valid_loss_key, valid_success_rate_key, feature_maps, \
+    row_col_box_out_features, num_epochs, get_model_weight_path
 
 neural_network = SudokuNet(
     feature_maps=feature_maps,
@@ -231,7 +208,7 @@ def validate(
         newline=False
     )
 
-    return total_average_batch_loss, success_rate
+    return total_average_batch_loss, success_rate.item()
 
 
 log_info(
