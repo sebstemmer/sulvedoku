@@ -2,25 +2,19 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from neural_solve.model import SudokuNet
-from neural_solve.dataset import SudokuDataset
 from common.log_info import log_info
+from neural_solve.dataset import SudokuDataset
 from neural_solve.solve import get_most_certain_coord_and_index_value
-from neural_solve.train_params import dense_out_features
 from train_params import train_data_path, device, batch_size, learning_rate, weight_decay, load_from_epoch, epoch_key, \
-    model_state_key, optimizer_state_key, train_loss_key, valid_loss_key, valid_success_rate_key, feature_maps, \
-    row_col_box_out_features, num_epochs, get_model_weight_path
+    model_state_key, optimizer_state_key, train_loss_key, valid_loss_key, valid_success_rate_key, num_epochs, \
+    get_model_weight_path, sudoku_net, SudokuNet
 
-neural_network = SudokuNet(
-    feature_maps=feature_maps,
-    row_col_box_out_features=row_col_box_out_features,
-    dense_out_features=dense_out_features
-).to(device)
+sudoku_net_on_device = sudoku_net.to(device)
 
 if load_from_epoch is not None:
     checkpoint = torch.load(get_model_weight_path(load_from_epoch))
 
-    neural_network.load_state_dict(checkpoint[model_state_key])
+    sudoku_net_on_device.load_state_dict(checkpoint[model_state_key])
 
     log_info(
         label=f"loaded weights from epoch {load_from_epoch}"
@@ -28,12 +22,12 @@ if load_from_epoch is not None:
 
 log_info(
     label="SudokuNet:",
-    info=str(neural_network)
+    info=str(sudoku_net_on_device)
 )
 
 log_info(
     label="number of trainable parameters:",
-    info=str(sum(p.numel() for p in neural_network.parameters() if p.requires_grad))
+    info=str(sum(p.numel() for p in sudoku_net_on_device.parameters() if p.requires_grad))
 )
 
 log_info(
@@ -88,7 +82,7 @@ log_info(
 )
 
 optimizer = torch.optim.AdamW(
-    params=neural_network.parameters(),
+    params=sudoku_net_on_device.parameters(),
     lr=learning_rate,
     weight_decay=weight_decay
 )
@@ -214,7 +208,10 @@ def validate(
 log_info(
     label="at start:"
 )
-valid_loss, valid_success_rate = validate(neural_network, valid_loader)
+valid_loss, valid_success_rate = validate(
+    neural_network=sudoku_net_on_device,
+    valid_loader=valid_loader
+)
 
 for epoch in range(num_epochs):
     log_info(label=f"epoch: {epoch}", newline=False)
