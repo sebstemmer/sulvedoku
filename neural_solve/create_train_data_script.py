@@ -24,7 +24,6 @@ def get_train_data_row(
     if len(solved_until_no_trivial_solutions.grid.filled_coords) == 0:
         return None
 
-    solution = np.array(list(solution_str), dtype=np.uint8)
     solution_chars = list(solution_str)
 
     input_str: str = ""
