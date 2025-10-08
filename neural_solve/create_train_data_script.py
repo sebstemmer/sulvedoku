@@ -3,9 +3,9 @@ import numpy as np
 import csv
 from common.track_progress import track
 from solve.solve import solve_grid_until_no_trivial_solutions
+from neural_solve.train_utils import train_data_path
 
 raw_data_path = "./data/3m-sudokus.csv"
-train_data_path = "./data/train_data.csv"
 
 def get_train_data_row(
         quiz_str: str,

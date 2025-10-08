@@ -4,8 +4,6 @@
 .idea
 
 data/*
-!data/put_data_here
-
 !data/sudoku_net_training_checkpoints/
 data/sudoku_net_training_checkpoints/*
 !data/sudoku_net_training_checkpoints/training_checkpoint_data_here
