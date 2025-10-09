@@ -159,7 +159,7 @@ The optimal `max_remove_depth` for creating Sudokus with a specified number of c
 python -m benchmark.create_script
 ```
 
-### Neural Sudoku Solver
+## Neural Sudoku Solver
 
 The script
 
