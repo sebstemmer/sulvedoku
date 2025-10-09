@@ -1,8 +1,12 @@
-# Create and Solve Sudokus
+# Create and Solve Sudokus (with Convolutional Neural Networks)
 
 This repository focuses on solving Sudokus, generating filled Sudoku grids, and creating Sudokus with a specified number
 of clues. A detailed explanation and additional context can be found
 in [a post on my personal blog](https://sebstemmer.com/algorithms/2025/09/23/create-and-solve-sudokus.html).
+
+In addition, a convolutional neural network is trained and integrated into the classical Sudoku backtracking algorithm.
+A detailed explanation and evaluation of this approach are provided
+in [another post on my personal blog](https://sebstemmer.com/algorithms/2025/10/09/solve-sudokus-with-convolutional-neural-networks.html).
 
 **Note:** All scripts should be executed using
 
@@ -21,14 +25,18 @@ from the **root** of the repository.
 ├── create/
 ├── common/
 ├── benchmark/
+├── neural_solve/
 ```
 
-* `data/` contains test and benchmarking data.
+* `data/` contains the test and benchmarking datasets, the training data for the neural network, and the saved model
+  checkpoints.
 * `grid/` provides utility functions for working with Sudoku grids.
 * `solve/` includes everything related to solving Sudokus with backtracking approaches.
 * `create/` handles generating Sudokus with a specified number of clues.
 * `common/` contains shared utility functions.
 * `benchmark/` includes scripts for benchmarking the performance of the different algorithms.
+* `neural_solve/` contains scripts for creating training data, training a neural network and using it in a guess
+  strategy.
 
 ## Installation
 
@@ -150,3 +158,88 @@ The optimal `max_remove_depth` for creating Sudokus with a specified number of c
 ```
 python -m benchmark.create_script
 ```
+
+### Neural Sudoku Solver
+
+The script
+
+```
+python -m neural_solve.create_train_data_script
+```
+
+transforms the [raw dataset](https://www.kaggle.com/datasets/radcliffe/3-million-sudoku-puzzles-with-ratings) into the
+final training data used for model training.
+
+The neural network, defined in
+
+```
+neural_solve/model.py
+```
+
+can be trained using:
+
+```
+python -m neural_solve.train_script
+```
+
+It uses the PyTorch dataset defined in
+
+```
+neural_solve/dataset.py
+```
+
+A unit test for a model function is provided in:
+
+```
+python -m neural_solve.model_test_script
+```
+
+All hyperparameters and utility functions, such as the cross-entropy loss and validation logic, are defined in:
+
+```
+neural_solve/train_utils.py
+```
+
+The training script saves losses, model parameters, and checkpoints in the `data/sudoku_net_training_checkpoints`
+directory.
+The losses can be visualized using:
+
+```
+neural_solve/visualize_training_loss_script.py
+```
+
+The best-performing model is saved as `data/final_sudoku_net_model.pth` and is used in:
+
+```
+neural_solve/solve.py - neural_guess_strategy(
+        grid: Grid
+) -> tuple[Coord, int]
+```
+
+which integrates into the classical backtracking algorithm.
+
+Utility functions for creating the target and allowed-values masks from a Sudoku are implemented in:
+
+```
+neural_solve/solve.py - create_x_target_mask_and_allowed_values_mask(
+        coord_to_value: dict[Coord, int],
+        coord_to_allowed_values: dict[Coord, tuple[int, ...]]
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+```
+
+The function that determines where the neural network is most confident is defined in:
+
+```
+neural_solve/get_most_certain_coord_and_index_value.py - get_most_certain_coord_and_index_value(
+        allowed_mask_n_81_9: torch.Tensor,
+        logits_n_81_9: torch.Tensor,
+        target_mask_n_81: torch.Tensor
+) -> tuple[list[Coord], list[int]]
+```
+
+Model evaluation on the test set can be performed using:
+
+```
+neural_solve/evaluate_on_test_set_script.py
+```
+
