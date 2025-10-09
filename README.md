@@ -6,7 +6,7 @@ in [a post on my personal blog](https://sebstemmer.com/algorithms/2025/09/23/cre
 
 In addition, a convolutional neural network is trained and integrated into the classical Sudoku backtracking algorithm.
 A detailed explanation and evaluation of this approach are provided
-in [another post on my personal blog](https://sebstemmer.com/algorithms/2025/10/09/solve-sudokus-with-convolutional-neural-networks.html).
+in [another post on my personal blog](https://www.sebstemmer.com/data/science/implementation/2025/10/09/solve-sudokus-with-convolutional-neural-networks.html).
 
 **Note:** All scripts should be executed using
 
