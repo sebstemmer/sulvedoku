@@ -2,7 +2,7 @@
 
 This repository focuses on solving Sudokus, generating filled Sudoku grids, and creating Sudokus with a specified number
 of clues. A detailed explanation and additional context can be found
-in [a post on my personal blog](https://sebstemmer.com/algorithms/2025/09/23/create-and-solve-sudokus.html).
+in [a post on my personal blog](https://www.sebstemmer.com/algorithms/2025/09/24/create-and-solve-sudokus.html).
 
 In addition, a convolutional neural network is trained and integrated into the classical Sudoku backtracking algorithm.
 A detailed explanation and evaluation of this approach are provided
